@@ -11,3 +11,4 @@ typer~=0.20.0
 pandas~=2.3.0
 matplotlib~=3.10.3
 numpy~=2.1.2
+ipython~=9.4.0
