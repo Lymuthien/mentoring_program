@@ -1,9 +1,13 @@
-loguru
+loguru~=0.7.3
 mkdocs
 pip
-pytest
-python-dotenv
+pytest~=8.4.2
+python-dotenv~=1.1.1
 ruff
-tqdm
-typer
+tqdm~=4.67.1
+typer~=0.20.0
 -e .
+
+pandas~=2.3.0
+matplotlib~=3.10.3
+numpy~=2.1.2
