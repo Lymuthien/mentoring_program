@@ -1,0 +1,32 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "recruit_restaurant_visitor_forecasting"
+version = "0.0.1"
+description = "Predict how many future visitors a restaurant will receive"
+authors = [
+  { name = "Kozlova Tatsiana" },
+]
+
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    
+]
+requires-python = "~=3.13.0"
+
+
+[tool.ruff]
+line-length = 99
+src = ["recruit_restaurant_visitor_forecasting"]
+include = ["pyproject.toml", "recruit_restaurant_visitor_forecasting/**/*.py"]
+
+[tool.ruff.lint]
+extend-select = ["I"]  # Add import sorting
+
+[tool.ruff.lint.isort]
+known-first-party = ["recruit_restaurant_visitor_forecasting"]
+force-sort-within-sections = true
+
