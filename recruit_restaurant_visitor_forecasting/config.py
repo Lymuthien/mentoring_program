@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import numpy as np
+import matplotlib as mpl
 from dotenv import load_dotenv
 from loguru import logger
 
@@ -62,6 +64,11 @@ HPG_STORE_REL_STR = HPG_STORE_STR + " relation"
 CITY_REGION_COL = "city_region"
 CITY_COL = "city"
 VISITORS_DIFF_COL = "visitors_difference"
+AIR_DAILY_COL = "air_daily"
+HPG_DAILY_COL = "hpg_daily"
+RESERVE_HPG = RESERVE_VISITORS_COL + "_hpg"
+RESERVE_AIR = RESERVE_VISITORS_COL + "_air"
+DAYS_FROM_HOL_COL = "days_from_holiday"
 
 # Seasonal columns
 
@@ -72,3 +79,7 @@ DAY_OF_WEEK_COL = "day_of_week"
 DAY_STR_COL = "day_str"
 YEAR_MONTH_COL = "year_month"
 DAY_COL = "day"
+
+np.random.seed(42)
+
+MONTH_COLORS = np.random.choice(list(mpl.colors.XKCD_COLORS.keys()), 12, replace=False)

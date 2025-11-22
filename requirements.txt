@@ -6,9 +6,10 @@ python-dotenv~=1.1.1
 ruff
 tqdm~=4.67.1
 typer~=0.20.0
--e .
 
 pandas~=2.3.0
 matplotlib~=3.10.3
 numpy~=2.1.2
 ipython~=9.4.0
+seaborn~=0.13.2
+statsmodels~=0.14.5
