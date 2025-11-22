@@ -5,6 +5,8 @@ from tqdm import tqdm
 import typer
 import pandas as pd
 import matplotlib.pyplot as plt
+from functools import wraps
+
 
 from recruit_restaurant_visitor_forecasting.config import (
     FIGURES_DIR,
@@ -17,42 +19,50 @@ from recruit_restaurant_visitor_forecasting.config import (
     MONTH_COL,
     DAY_STR_COL,
     DAY_OF_WEEK_COL,
-    DAY_COL,
     MONTH_COLORS,
 )
 from recruit_restaurant_visitor_forecasting.utils import mean_by_group
 
 app = typer.Typer()
 
+def show_figure(figsize=(10, 6)):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            plt.figure(figsize=figsize)
+            try:
+                result = func(*args, **kwargs)
+                plt.show()
+                return result
+            except Exception as e:
+                plt.close()
+                raise e
+        return wrapper
+    return decorator
 
-def plot_first_restaurant_mentions_hist(
-    df: pd.DataFrame, df_str: str, grouping_col: str, date_col: str
-) -> None:
-    df.reset_index().groupby(grouping_col)[date_col].min().hist(bins=50)
-    plt.xlabel("Date of first mention")
+
+def plot_restaurant_mention_hist(
+    df: pd.DataFrame,
+    df_str: str,
+    grouping_col: str,
+    date_col: str = VISIT_DATE_COL,
+    first: bool = True,
+):
+    if first:
+        df.reset_index().groupby(grouping_col)[date_col].min().hist(bins=50)
+    else:
+        df.reset_index().groupby(grouping_col)[date_col].max().hist(bins=50)
+    text: str = "first" if first else "last"
+    plt.xlabel(f"Date of {text} mention")
     plt.ylabel("Count of restaurants")
-    plt.title(f"{df_str} - First visit mention dates - Histogram")
+    plt.title(f"{df_str} - {text.capitalize()} visit mention dates - Histogram")
     plt.show()
-
-
-def plot_last_restaurant_mentions_hist(
-    df: pd.DataFrame, df_str: str, grouping_col: str, date_col: str
-) -> None:
-    df.reset_index().groupby(grouping_col)[date_col].max().hist(bins=50)
-    plt.xlabel("Date of last mention")
-    plt.ylabel("Count of restaurants")
-    plt.title(f"{df_str} - Last visit mention dates - Histogram")
-    plt.show()
-
 
 def plot_opened_restaurants(
-    df: pd.DataFrame, df_str: str, visit_col: str, store_col: str, count: bool = True
+    df: pd.DataFrame, df_str: str, visit_col: str, store_col: str
 ) -> None:
     plt.figure(figsize=(10, 6))
-    if count:
-        df.groupby(visit_col)[store_col].count().plot()
-    else:
-        df.groupby(visit_col)[store_col].nunique().plot()
+    df.groupby(visit_col)[store_col].count().plot()
     plt.xlabel("Date")
     plt.ylabel("Count of opened (not missed) restaurants")
     plt.title(f"{df_str} - Not missed restaurants - Time plot")
@@ -192,12 +202,12 @@ def plot_top_values_by_col(
     )
 
 
-def plot_weekly_seasonality(df: pd.DataFrame, visitors_column_name: str, title: str):
+def plot_weekly_seasonality(df: pd.DataFrame, visitors_col: str, title: str):
     df_plot = (
-        df[[MONTH_COL, DAY_STR_COL, visitors_column_name, DAY_OF_WEEK_COL]]
+        df[[MONTH_COL, DAY_STR_COL, visitors_col, DAY_OF_WEEK_COL]]
         .dropna()
         .groupby([DAY_STR_COL, MONTH_COL, DAY_OF_WEEK_COL])
-        .mean()[[visitors_column_name]]
+        .mean()[[visitors_col]]
         .reset_index()
     )
     df_plot = df_plot.sort_values(by=DAY_OF_WEEK_COL, ascending=True)
@@ -209,24 +219,26 @@ def plot_weekly_seasonality(df: pd.DataFrame, visitors_column_name: str, title: 
         month_data = df_plot[df_plot[MONTH_COL] == month]
         plt.plot(
             DAY_STR_COL,
-            visitors_column_name,
+            visitors_col,
             data=month_data,
             color=MONTH_COLORS[i],
             label=month,
         )
-    plt.gca().set(ylabel=visitors_column_name, xlabel="Day of week")
+    plt.gca().set(ylabel=visitors_col, xlabel="Day of week")
     plt.legend(title="Month", bbox_to_anchor=(1.05, 1), loc="upper left")
     plt.title(title)
     plt.show()
 
 
 def plot_visitors_for_first_period(
-    df: pd.DataFrame, n_month: int, visitors_column_name: str
+    df: pd.DataFrame,
+    visitors_col: str,
+    n_month: int = 3,
 ):
     min_date = df.index.min()
     max_allowed_date = min_date + pd.DateOffset(months=n_month)
     df.loc[(df.index <= max_allowed_date)].groupby(VISIT_DATE_COL)[
-        visitors_column_name
+        visitors_col
     ].mean().plot(
         title=f"Visitors for first {n_month} month - Time Plot",
         figsize=(10, 6),
@@ -236,16 +248,6 @@ def plot_visitors_for_first_period(
     plt.ylabel("Visitors")
     plt.xlabel("Date")
     plt.grid(alpha=0.3)
-    plt.show()
-
-
-def plot_visitors_by_holiday_dist(
-    df: pd.DataFrame, df_str: str, holiday_col: str, visitors_col: str
-):
-    df.plot()
-    plt.xlabel(holiday_col)
-    plt.ylabel(visitors_col)
-    plt.title(f"{df_str} - Mean visitors by distance from holiday")
     plt.show()
 
 

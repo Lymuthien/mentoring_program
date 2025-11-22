@@ -16,7 +16,7 @@ def compute_unique(datasets: list[DatasetInfo]) -> UniqueIds:
     return result
 
 
-def print_intersection(ids: UniqueIds, name1, name2):
+def print_intersection(ids: UniqueIds, name1: str, name2: str):
     set1 = ids[name1]
     set2 = ids[name2]
     print(f"{name1} & {name2} intersection: {len(set1 & set2)}")
@@ -57,7 +57,6 @@ def find_reservations_exceed_visitors(
         .sum()
         .reset_index()
     )
-    print_df_len(daily_visitors, "Daily visitors (sum) of grouping df")
     merged_df = pd.merge(
         merging_df,
         daily_visitors,
