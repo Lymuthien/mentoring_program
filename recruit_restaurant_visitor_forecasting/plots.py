@@ -58,6 +58,7 @@ def plot_restaurant_mention_hist(
     plt.title(f"{df_str} - {text.capitalize()} visit mention dates - Histogram")
     plt.show()
 
+@show_figure(figsize=(10, 6))
 def plot_opened_restaurants(
     df: pd.DataFrame, df_str: str, visit_col: str, store_col: str
 ) -> None:
@@ -66,11 +67,9 @@ def plot_opened_restaurants(
     plt.xlabel("Date")
     plt.ylabel("Count of opened (not missed) restaurants")
     plt.title(f"{df_str} - Not missed restaurants - Time plot")
-    plt.show()
 
-
+@show_figure(figsize=(10, 6))
 def plot_opened_restaurants_pct(df: pd.DataFrame, df_str: str):
-    plt.figure(figsize=(10, 6))
     df[PERCENTAGE_COL].plot()
     plt.xlabel("Date")
     plt.ylabel("Percentage of not missed restaurants (%)")
@@ -78,17 +77,14 @@ def plot_opened_restaurants_pct(df: pd.DataFrame, df_str: str):
         f"{df_str} - Percentage of not missed restaurants (including only mentioned restaurants) - Time plot"
     )
     plt.grid(True)
-    plt.show()
 
-
+@show_figure(figsize=(14, 5))
 def plot_daily_corr(df: pd.DataFrame, col1: str, col2: str) -> None:
-    plt.figure(figsize=(14, 5))
     plt.plot(df.index, df[col1], label=col1.replace("_", " "), alpha=0.7)
     plt.plot(df.index, df[col2], label=col2.replace("_", " "), alpha=0.7)
     plt.title("Daily Mean Reservations")
     plt.legend()
     plt.grid(True)
-    plt.show()
 
 
 def plot_mean_by_date(df: pd.DataFrame):
@@ -153,14 +149,12 @@ def subplot_visitors_by_restaurant(
     plt.ylabel("Count of restaurants")
     plt.grid(True, alpha=0.3)
 
-
+@show_figure(figsize=(6, 6))
 def plot_location_scatter(df: pd.DataFrame, df_str: str) -> None:
-    plt.figure(figsize=(6, 6))
     plt.scatter(df[LONGITUDE_COL], df[LATITUDE_COL], s=10)
     plt.title(f"{df_str}: store locations")
     plt.xlabel("Longitude")
     plt.ylabel("Latitude")
-    plt.show()
 
 
 def plot_top_freq_values(
@@ -201,7 +195,7 @@ def plot_top_values_by_col(
         f"{df_str} - Mean {col} by {value_name} {'anti-top' if ascending else 'top'}"
     )
 
-
+@show_figure(figsize=(10, 6))
 def plot_weekly_seasonality(df: pd.DataFrame, visitors_col: str, title: str):
     df_plot = (
         df[[MONTH_COL, DAY_STR_COL, visitors_col, DAY_OF_WEEK_COL]]
@@ -214,7 +208,6 @@ def plot_weekly_seasonality(df: pd.DataFrame, visitors_col: str, title: str):
 
     months = sorted(df_plot[MONTH_COL].unique())
 
-    plt.figure(figsize=(10, 6))
     for i, month in enumerate(months):
         month_data = df_plot[df_plot[MONTH_COL] == month]
         plt.plot(
@@ -227,7 +220,6 @@ def plot_weekly_seasonality(df: pd.DataFrame, visitors_col: str, title: str):
     plt.gca().set(ylabel=visitors_col, xlabel="Day of week")
     plt.legend(title="Month", bbox_to_anchor=(1.05, 1), loc="upper left")
     plt.title(title)
-    plt.show()
 
 
 def plot_visitors_for_first_period(
@@ -250,10 +242,8 @@ def plot_visitors_for_first_period(
     plt.grid(alpha=0.3)
     plt.show()
 
-
+@show_figure(figsize=(10, 6))
 def plot_acf(acf_df: pd.DataFrame, col: str, df_str: str) -> None:
-    plt.figure(figsize=(7, 4))
-
     lags = acf_df.index
     values = acf_df["ACF"]
 
@@ -262,7 +252,6 @@ def plot_acf(acf_df: pd.DataFrame, col: str, df_str: str) -> None:
     plt.xlabel("Lag")
     plt.ylabel("ACF")
     plt.title(f"{df_str} - {col} - ACF")
-    plt.show()
 
 
 @app.command()
