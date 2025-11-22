@@ -3,10 +3,14 @@ from pathlib import Path
 from loguru import logger
 from tqdm import tqdm
 import typer
+import pandas as pd
 
 from recruit_restaurant_visitor_forecasting.config import PROCESSED_DATA_DIR
 
 app = typer.Typer()
+
+def get_first_str_values(s: pd.Series, n: int, sep: str = ' ') -> pd.Series:
+    return s.str.split(sep).str[:n].str.join(sep)
 
 
 @app.command()

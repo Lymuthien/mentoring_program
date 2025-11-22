@@ -30,3 +30,45 @@ try:
     logger.add(lambda msg: tqdm.write(msg, end=""), colorize=True)
 except ModuleNotFoundError:
     pass
+
+# Df names
+
+AIR_VISIT_STR = "Air visit"
+AIR_RESERVE_STR = "Air reserve"
+HPG_RESERVE_STR = "Hpg reserve"
+AIR_STORE_STR = "Air store"
+HPG_STORE_STR = "Hpg store"
+PERCENTAGE_COL = "percentage"
+SAMPLE_SUBMISSION_STR = "Sample submission"
+
+# Column names
+
+AIR_RESTAURANT_ID_COL = "air_store_id"
+HPG_RESTAURANT_ID_COL = "hpg_store_id"
+VISIT_DATETIME_COL = "visit_datetime"
+RESERVE_DATETIME_COL = "reserve_datetime"
+VISIT_DATE_COL = "visit_date"
+CALENDAR_DATE_COL = "calendar_date"
+RESERVE_VISITORS_COL = "reserve_visitors"
+VISITORS_COL = "visitors"
+AIR_AREA_COL = "air_area_name"
+HPG_AREA_COL = "hpg_area_name"
+LATITUDE_COL = "latitude"
+LONGITUDE_COL = "longitude"
+AIR_GENRE_COL = "air_genre_name"
+HPG_GENRE_COL = "hpg_genre_name"
+AIR_STORE_REL_STR = AIR_STORE_STR + " relation"
+HPG_STORE_REL_STR = HPG_STORE_STR + " relation"
+CITY_REGION_COL = "city_region"
+CITY_COL = "city"
+VISITORS_DIFF_COL = "visitors_difference"
+
+# Seasonal columns
+
+YEAR_COL = "year"
+MONTH_COL = "month"
+WEEK_COL = "week"
+DAY_OF_WEEK_COL = "day_of_week"
+DAY_STR_COL = "day_str"
+YEAR_MONTH_COL = "year_month"
+DAY_COL = "day"
