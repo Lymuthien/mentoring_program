@@ -79,6 +79,7 @@ DAY_OF_WEEK_COL = "day_of_week"
 DAY_STR_COL = "day_str"
 YEAR_MONTH_COL = "year_month"
 DAY_COL = "day"
+SEASONAL_COLUMNS = (YEAR_COL, MONTH_COL, WEEK_COL, DAY_OF_WEEK_COL, DAY_STR_COL, YEAR_MONTH_COL, DAY_COL)
 
 np.random.seed(42)
 

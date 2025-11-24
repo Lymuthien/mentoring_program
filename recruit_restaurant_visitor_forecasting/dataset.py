@@ -6,6 +6,7 @@ import typer
 import pandas as pd
 
 from recruit_restaurant_visitor_forecasting.config import (
+    INTERIM_DATA_DIR,
     PROCESSED_DATA_DIR,
     RAW_DATA_DIR,
     VISIT_DATETIME_COL,
@@ -16,6 +17,9 @@ from recruit_restaurant_visitor_forecasting.config import (
 
 def read_csv(relative_path: str):
     return pd.read_csv(RAW_DATA_DIR / relative_path.lstrip("/"))
+
+def save_prepared(df: pd.DataFrame, relative_path: str):
+    df.reset_index().to_csv(INTERIM_DATA_DIR / relative_path, index=False)
 
 
 def standardize_date(df: pd.DataFrame, col: str):
@@ -35,6 +39,30 @@ def split_reserve_by_date(
     target = df[df[col] >= cutoff_date].copy()
 
     return occurred, target
+
+
+def fill_missing_dates(
+    df: pd.DataFrame, date_col: str, id_col: str, visitors_col: str
+) -> pd.DataFrame:
+    df = df.reset_index().copy()
+    first_dates = df.groupby(id_col)[date_col].min()
+
+    global_end = df[date_col].max()
+
+    frames = []
+    for store_id, first_date in first_dates.items():
+        if first_date > global_end:
+            continue
+        dr = pd.date_range(start=first_date, end=global_end, freq="D")
+        tmp = pd.DataFrame({id_col: store_id, date_col: dr})
+        frames.append(tmp)
+    full_idx = pd.concat(frames, ignore_index=True)
+
+    merged = full_idx.merge(df, how="left", on=[id_col, date_col])
+    merged[visitors_col] = merged[visitors_col].fillna(0).astype(int)
+
+    merged = merged.sort_values([id_col, date_col]).reset_index(drop=True)
+    return merged
 
 
 app = typer.Typer()

@@ -62,7 +62,7 @@ def find_reservations_exceed_visitors(
         daily_visitors,
         on=[store_col, date_col],
         how="outer",
-    )
+    ).fillna(0)
 
     problematic_rows = merged_df[
         (merged_df[visitors_col] < merged_df[reserve_visitors_col])
@@ -99,3 +99,15 @@ def compute_acf(df: pd.DataFrame, col: str, nlags: int = 7) -> pd.DataFrame:
     return pd.DataFrame(
         {"ACF": acf_vals}, index=pd.RangeIndex(start=0, stop=nlags + 1, name="Lag")
     )[1:]
+
+
+def find_missed_groups(
+    df_missing: pd.DataFrame, df_full: pd.DataFrame, columns: list[str]
+) -> pd.DataFrame:
+    groups_a = df_full[columns].drop_duplicates()
+    groups_b = df_missing[columns].drop_duplicates()
+
+    merged = groups_a.merge(groups_b, on=columns, how="left", indicator=True)
+
+    only_in_a = merged[merged["_merge"] == "left_only"].drop(columns=["_merge"])
+    return only_in_a
