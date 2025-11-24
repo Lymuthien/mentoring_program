@@ -1,3 +1,4 @@
+from enum import Enum
 from pathlib import Path
 
 from loguru import logger
@@ -15,11 +16,43 @@ from recruit_restaurant_visitor_forecasting.config import (
 )
 
 
-def read_csv(relative_path: str):
-    return pd.read_csv(RAW_DATA_DIR / relative_path.lstrip("/"))
+class DataDir(str, Enum):
+    RAW = "raw"
+    INTERIM = "interim"
+    PROCESSED = "processed"
 
-def save_prepared(df: pd.DataFrame, relative_path: str):
-    df.reset_index().to_csv(INTERIM_DATA_DIR / relative_path, index=False)
+
+DATA_DIRS = {
+    DataDir.RAW: RAW_DATA_DIR,
+    DataDir.INTERIM: INTERIM_DATA_DIR,
+    DataDir.PROCESSED: PROCESSED_DATA_DIR,
+}
+
+
+def read_csv(relative_path: str, directory: DataDir = DataDir.RAW) -> pd.DataFrame:
+    """
+    :param relative_path: path to the file relative to the selected directory
+    :param directory: DataDir.RAW | DataDir.INTERIM | DataDir.PROCESSED
+    :return: DataFrame
+    """
+    base_dir = DATA_DIRS.get(directory)
+    if base_dir is None:
+        raise ValueError(f"Invalid directory: {directory}")
+    return pd.read_csv(base_dir / relative_path.lstrip("/"))
+
+
+def save_csv(
+    df: pd.DataFrame, relative_path: str, directory: DataDir = DataDir.INTERIM
+) -> None:
+    """
+    :param df: DataFrame to save
+    :param relative_path: path to the file relative to the selected directory
+    :param directory: DataDir.RAW | DataDir.INTERIM | DataDir.PROCESSED
+    """
+    base_dir = DATA_DIRS.get(directory)
+    if base_dir is None:
+        raise ValueError(f"Invalid directory: {directory}")
+    df.reset_index().to_csv(base_dir / relative_path.lstrip("/"), index=False)
 
 
 def standardize_date(df: pd.DataFrame, col: str):
