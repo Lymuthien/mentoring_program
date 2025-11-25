@@ -69,6 +69,7 @@ HPG_DAILY_COL = "hpg_daily"
 RESERVE_HPG = RESERVE_VISITORS_COL + "_hpg"
 RESERVE_AIR = RESERVE_VISITORS_COL + "_air"
 DAYS_FROM_HOL_COL = "days_from_holiday"
+HOLIDAY_COL = "holiday_flg"
 
 # Seasonal columns
 
@@ -79,8 +80,14 @@ DAY_OF_WEEK_COL = "day_of_week"
 DAY_STR_COL = "day_str"
 YEAR_MONTH_COL = "year_month"
 DAY_COL = "day"
-SEASONAL_COLUMNS = (YEAR_COL, MONTH_COL, WEEK_COL, DAY_OF_WEEK_COL, DAY_STR_COL, YEAR_MONTH_COL, DAY_COL)
 
 np.random.seed(42)
 
 MONTH_COLORS = np.random.choice(list(mpl.colors.XKCD_COLORS.keys()), 12, replace=False)
+
+# Feature columns
+
+GOLDEN_WEEK_FLG = "golden_week_flg"
+OPENED_RECENTLY_FLG = "opened_within_last_six_months_flg"
+OPEN_DATE_COL = "open_date"
+

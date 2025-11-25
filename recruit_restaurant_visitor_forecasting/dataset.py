@@ -52,7 +52,7 @@ def save_csv(
     base_dir = DATA_DIRS.get(directory)
     if base_dir is None:
         raise ValueError(f"Invalid directory: {directory}")
-    df.reset_index().to_csv(base_dir / relative_path.lstrip("/"), index=False)
+    df.to_csv(base_dir / relative_path.lstrip("/"), index=False)
 
 
 def standardize_date(df: pd.DataFrame, col: str):

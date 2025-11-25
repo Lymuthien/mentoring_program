@@ -17,6 +17,10 @@ from recruit_restaurant_visitor_forecasting.config import (
     DAY_OF_WEEK_COL,
     PERCENTAGE_COL,
     DAY_STR_COL,
+    GOLDEN_WEEK_FLG,
+    HOLIDAY_COL,
+    OPENED_RECENTLY_FLG,
+    OPEN_DATE_COL,
 )
 
 app = typer.Typer()
@@ -61,15 +65,15 @@ def add_seasonal_columns(df: pd.DataFrame):
     df[YEAR_MONTH_COL] = [str(x.year) + "_" + str(x.month) for x in df.index]
 
 
-def add_holiday_columns(df: pd.DataFrame, date_col: str, holiday_col: str):
+def add_holiday_columns(df: pd.DataFrame, date_col: str):
     df = df.sort_values(date_col).reset_index(drop=True)
 
-    grp_prev = df[holiday_col].cumsum()
+    grp_prev = df[HOLIDAY_COL].cumsum()
     days_since_prev = df.groupby(grp_prev).cumcount()
     days_since_prev = days_since_prev.where(grp_prev != 0, np.iinfo(np.int64).max)
 
     df_rev = df.iloc[::-1].reset_index(drop=True)
-    grp_next = df_rev[holiday_col].cumsum()
+    grp_next = df_rev[HOLIDAY_COL].cumsum()
     days_until_next_rev = df_rev.groupby(grp_next).cumcount()
     days_until_next_rev = days_until_next_rev.where(
         grp_next.values != 0, np.iinfo(np.int64).max
@@ -82,6 +86,35 @@ def add_holiday_columns(df: pd.DataFrame, date_col: str, holiday_col: str):
     )
 
     df[DAYS_FROM_HOL_COL] = signed.astype(int)
+
+    return df
+
+
+def add_golden_week_flg(df: pd.DataFrame, year: int, date_col: str) -> pd.DataFrame:
+    df = df.copy()
+
+    start_date = pd.Timestamp(year=year, month=4, day=29)
+    end_date = pd.Timestamp(year=year, month=5, day=5)
+
+    df.loc[df[date_col].between(start_date, end_date), GOLDEN_WEEK_FLG] = 1
+
+    return df
+
+
+def add_opened_recently_flg(
+    df: pd.DataFrame,
+    open_dates: pd.Series,
+    date_col: str,
+    id_col: str,
+    n_month: int = 6,
+) -> pd.DataFrame:
+
+    df = df.copy()
+    df = df.merge(open_dates, left_on=id_col, right_index=True, how="left")
+
+    threshold = df[date_col] - pd.DateOffset(months=n_month)
+
+    df[OPENED_RECENTLY_FLG] = (df[OPEN_DATE_COL] >= threshold).astype("int8")
 
     return df
 
