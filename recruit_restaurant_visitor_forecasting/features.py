@@ -21,6 +21,8 @@ from recruit_restaurant_visitor_forecasting.config import (
     HOLIDAY_COL,
     OPENED_RECENTLY_FLG,
     OPEN_DATE_COL,
+    IS_OPENED,
+    DAYS_SINCE_LAST_RECORD,
 )
 
 app = typer.Typer()
@@ -114,9 +116,35 @@ def add_opened_recently_flg(
 
     threshold = df[date_col] - pd.DateOffset(months=n_month)
 
-    df[OPENED_RECENTLY_FLG] = (df[OPEN_DATE_COL] >= threshold).astype("int8")
+    df[OPENED_RECENTLY_FLG] = (df[OPEN_DATE_COL] >= threshold).astype(int)
 
     return df
+
+
+def add_open_flg(df: pd.DataFrame, visitors_col: str):
+    df = df.copy()
+    df[IS_OPENED] = (df[visitors_col] > 0).astype(int)
+
+    return df
+
+
+def add_days_since_last_record(
+    df: pd.DataFrame, id_col: str, date_col: str
+) -> pd.DataFrame:
+    df = df.copy()
+    df.sort_values([id_col, date_col], inplace=True)
+
+    is_open = df[IS_OPENED]
+    prev_is_open = is_open.groupby(df[id_col]).shift(1).fillna(0)
+    seg = prev_is_open.groupby(df[id_col]).cumsum()
+    position = df.groupby([df[id_col], seg]).cumcount().astype(int)
+
+    first_is_open = is_open.groupby([df[id_col], seg]).transform("first").astype(bool)
+    base = np.where(first_is_open, 0, 1)
+
+    df[DAYS_SINCE_LAST_RECORD] = base + position
+
+    return df.reset_index(drop=True)
 
 
 @app.command()
