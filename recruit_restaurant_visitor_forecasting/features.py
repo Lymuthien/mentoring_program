@@ -147,6 +147,71 @@ def add_days_since_last_record(
     return df.reset_index(drop=True)
 
 
+import pandas as pd
+
+
+def add_time_based_target_encoding(
+    train_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    category_col: str,
+    date_col: str,
+    target_col: str,
+    feature_name: str,
+    min_samples: int = 30,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    train_df = train_df.copy()
+    test_df = test_df.copy()
+
+    stats_df = train_df[train_df[target_col] > 0].copy()
+
+    daily = stats_df.groupby(date_col)[target_col].agg(["sum", "count"]).reset_index()
+    daily["g_cum_sum"] = daily["sum"].cumsum() - daily["sum"]
+    daily["g_cum_cnt"] = daily["count"].cumsum() - daily["count"]
+    daily["global_mean"] = daily["g_cum_sum"] / daily["g_cum_cnt"].replace(0, np.nan)
+
+    agg = (
+        stats_df.groupby([category_col, date_col])[target_col]
+        .agg(["sum", "count"])
+        .reset_index()
+    )
+    agg["cum_sum"] = agg.groupby(category_col)["sum"].cumsum() - agg["sum"]
+    agg["cum_cnt"] = agg.groupby(category_col)["count"].cumsum() - agg["count"]
+
+    agg = agg.merge(
+        daily[[date_col, "global_mean"]],
+        on=date_col,
+        how="left",
+    )
+    category_mean = agg["cum_sum"] / agg["cum_cnt"].replace(0, np.nan)
+    smoothing = 1 / (1 + np.exp(-(agg["cum_cnt"] - min_samples)))
+
+    agg[feature_name] = (
+        agg["global_mean"] * (1 - smoothing)
+        + category_mean.fillna(agg["global_mean"]) * smoothing
+    )
+
+    enc = (
+        agg[[category_col, date_col, feature_name]]
+        .sort_values([category_col, date_col])
+        .reset_index(drop=True)
+    )
+
+    last_genre_values = enc.loc[
+        enc.groupby(category_col)[date_col].idxmax(), [category_col, feature_name]
+    ].reset_index(drop=True)
+    last_global_mean = agg.loc[
+        agg[date_col] == agg[date_col].max(), "global_mean"
+    ].max()
+
+    train_encoded = train_df.merge(enc, on=[category_col, date_col], how="left")
+
+    test_encoded = test_df.merge(
+        last_genre_values, on=[category_col], how="left"
+    ).fillna(last_global_mean)
+
+    return train_encoded, test_encoded
+
+
 @app.command()
 def main(
     # ---- REPLACE DEFAULT PATHS AS APPROPRIATE ----
