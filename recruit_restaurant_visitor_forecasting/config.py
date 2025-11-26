@@ -61,13 +61,9 @@ AIR_GENRE_COL = "air_genre_name"
 HPG_GENRE_COL = "hpg_genre_name"
 AIR_STORE_REL_STR = AIR_STORE_STR + " relation"
 HPG_STORE_REL_STR = HPG_STORE_STR + " relation"
-CITY_REGION_COL = "city_region"
-CITY_COL = "city"
 VISITORS_DIFF_COL = "visitors_difference"
 AIR_DAILY_COL = "air_daily"
 HPG_DAILY_COL = "hpg_daily"
-RESERVE_HPG = RESERVE_VISITORS_COL + "_hpg"
-RESERVE_AIR = RESERVE_VISITORS_COL + "_air"
 HOLIDAY_COL = "holiday_flg"
 
 # Seasonal columns
@@ -86,6 +82,8 @@ MONTH_COLORS = np.random.choice(list(mpl.colors.XKCD_COLORS.keys()), 12, replace
 
 # Feature columns
 
+CITY_REGION_COL = "city_region"
+CITY_COL = "city"
 GOLDEN_WEEK_FLG = "golden_week_flg"
 OPENED_RECENTLY_FLG = "opened_within_last_six_months_flg"
 OPEN_DATE_COL = "open_date"
@@ -94,4 +92,11 @@ IS_OPENED = "is_open_flg"
 DAYS_SINCE_LAST_RECORD = "days_since_last_visit_record"
 GENRE_TE = "air_genre_te"
 AREA_TE = "air_city_region_te"
+RESERVE_AIR = "air_reserves_sum"
+RESERVE_HPG = "hpg_reserves_sum"
+RESERVE_AIR_NEIGHBORS = RESERVE_AIR + "_neighbors"
+RESERVE_HPG_NEIGHBORS = RESERVE_HPG + "_neighbors"
+TOTAL_RESERVES = "total_reserves_sum"
+TOTAL_RESERVES_NEIGHBORS = TOTAL_RESERVES + "_neighbors"
+
 

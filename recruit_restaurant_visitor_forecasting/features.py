@@ -23,6 +23,17 @@ from recruit_restaurant_visitor_forecasting.config import (
     OPEN_DATE_COL,
     IS_OPENED,
     DAYS_SINCE_LAST_RECORD,
+    AIR_RESTAURANT_ID_COL,
+    HPG_RESTAURANT_ID_COL,
+    VISIT_DATE_COL,
+    RESERVE_VISITORS_COL,
+    CITY_REGION_COL,
+    RESERVE_AIR,
+    RESERVE_HPG,
+    RESERVE_AIR_NEIGHBORS,
+    TOTAL_RESERVES,
+    RESERVE_HPG_NEIGHBORS,
+    TOTAL_RESERVES_NEIGHBORS,
 )
 
 app = typer.Typer()
@@ -210,6 +221,80 @@ def add_time_based_target_encoding(
     ).fillna(last_global_mean)
 
     return train_encoded, test_encoded
+
+
+def add_sum_of_reserves(df: pd.DataFrame, output_col: str, id_col: str) -> pd.DataFrame:
+    df = df.copy()
+    df = (
+        df.groupby([id_col, VISIT_DATE_COL])[RESERVE_VISITORS_COL]
+        .sum()
+        .rename(output_col)
+    )
+    return df.reset_index()
+
+
+def add_neighbors_reserves(
+    df: pd.DataFrame,
+    reserves_col: str,
+    region_col: str,
+    neighbor_col: str,
+    exclude_self: bool = True,
+    fill_na=None,
+) -> pd.DataFrame:
+    df = df.copy()
+
+    grp_sum = df.groupby([region_col, VISIT_DATE_COL])[reserves_col].transform("sum")
+    grp_count = df.groupby([region_col, VISIT_DATE_COL])[reserves_col].transform(
+        "count"
+    )
+
+    if exclude_self:
+        neigh_sum = grp_sum - df[reserves_col]
+        neigh_count = grp_count - 1
+        neigh_mean = neigh_sum / neigh_count
+        neigh_mean = neigh_mean.where(neigh_count > 0, np.nan)
+    else:
+        neigh_mean = grp_sum / grp_count
+
+    if fill_na is not None:
+        neigh_mean = neigh_mean.fillna(fill_na)
+
+    df[neighbor_col] = neigh_mean
+    return df
+
+def add_total_reserves(df_visit: pd.DataFrame, air_res: pd.DataFrame, hpg_res: pd.DataFrame, region_col: str) -> pd.DataFrame:
+    df = df_visit.copy()
+    df = df.merge(
+        air_res,
+        on=[AIR_RESTAURANT_ID_COL, VISIT_DATE_COL, region_col],
+        how="left"
+    ).merge(
+        hpg_res,
+        on=[AIR_RESTAURANT_ID_COL, VISIT_DATE_COL, region_col],
+        how="left"
+    ).drop(HPG_RESTAURANT_ID_COL, axis=1)
+    cols = [RESERVE_AIR, RESERVE_HPG, RESERVE_AIR_NEIGHBORS]
+    df[cols] = df[cols].fillna(0)
+    df[TOTAL_RESERVES] = df[RESERVE_AIR] + df[RESERVE_HPG]
+    df.drop([RESERVE_AIR, RESERVE_HPG], axis=1, inplace=True)
+
+    return df
+
+def add_total_neigh_reserves(df_visit: pd.DataFrame, hpg_res: pd.DataFrame, region_col: str) -> pd.DataFrame:
+    df = df_visit.copy()
+    df = df.merge(
+        hpg_res.groupby([VISIT_DATE_COL, region_col])[RESERVE_HPG_NEIGHBORS].median().rename('temp'),
+        left_on=[VISIT_DATE_COL, region_col],
+        right_index=True,
+        how="left"
+    )
+    mask = df[RESERVE_HPG_NEIGHBORS].isna()
+    df.loc[mask, RESERVE_HPG_NEIGHBORS] = df.loc[mask, 'temp']
+    df.drop('temp', axis=1, inplace=True)
+    df[TOTAL_RESERVES_NEIGHBORS] = df[RESERVE_HPG_NEIGHBORS] + df[RESERVE_AIR_NEIGHBORS]
+    df.drop([RESERVE_HPG_NEIGHBORS, RESERVE_AIR_NEIGHBORS], axis=1, inplace=True)
+
+    return df
 
 
 @app.command()
