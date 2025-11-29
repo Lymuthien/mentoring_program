@@ -1,13 +1,7 @@
-from pathlib import Path
-
 import numpy as np
-from loguru import logger
-from tqdm import tqdm
-import typer
 import pandas as pd
 
 from recruit_restaurant_visitor_forecasting.config import (
-    PROCESSED_DATA_DIR,
     DAYS_FROM_HOL_COL,
     YEAR_COL,
     MONTH_COL,
@@ -27,16 +21,14 @@ from recruit_restaurant_visitor_forecasting.config import (
     HPG_RESTAURANT_ID_COL,
     VISIT_DATE_COL,
     RESERVE_VISITORS_COL,
-    CITY_REGION_COL,
     RESERVE_AIR,
     RESERVE_HPG,
     RESERVE_AIR_NEIGHBORS,
     TOTAL_RESERVES,
     RESERVE_HPG_NEIGHBORS,
     TOTAL_RESERVES_NEIGHBORS,
+    EXCLUDE_ZEROS,
 )
-
-app = typer.Typer()
 
 
 def get_first_str_values(s: pd.Series, n: int, sep: str = " ") -> pd.Series:
@@ -81,16 +73,15 @@ def add_seasonal_columns(df: pd.DataFrame):
 def add_holiday_columns(df: pd.DataFrame, date_col: str):
     df = df.sort_values(date_col).reset_index(drop=True)
 
+    inf = np.iinfo(np.int64).max
     grp_prev = df[HOLIDAY_COL].cumsum()
     days_since_prev = df.groupby(grp_prev).cumcount()
-    days_since_prev = days_since_prev.where(grp_prev != 0, np.iinfo(np.int64).max)
+    days_since_prev = days_since_prev.where(grp_prev != 0, inf)
 
     df_rev = df.iloc[::-1].reset_index(drop=True)
     grp_next = df_rev[HOLIDAY_COL].cumsum()
     days_until_next_rev = df_rev.groupby(grp_next).cumcount()
-    days_until_next_rev = days_until_next_rev.where(
-        grp_next.values != 0, np.iinfo(np.int64).max
-    )
+    days_until_next_rev = days_until_next_rev.where(grp_next.values != 0, inf)
     days_until_next = days_until_next_rev.iloc[::-1].reset_index(drop=True)
 
     before_mask = days_until_next < days_since_prev
@@ -103,13 +94,14 @@ def add_holiday_columns(df: pd.DataFrame, date_col: str):
     return df
 
 
-def add_golden_week_flg(df: pd.DataFrame, year: int, date_col: str) -> pd.DataFrame:
+def add_golden_week_flg(df: pd.DataFrame, years: list, date_col: str) -> pd.DataFrame:
     df = df.copy()
+    df[GOLDEN_WEEK_FLG] = 0
 
-    start_date = pd.Timestamp(year=year, month=4, day=29)
-    end_date = pd.Timestamp(year=year, month=5, day=5)
-
-    df.loc[df[date_col].between(start_date, end_date), GOLDEN_WEEK_FLG] = 1
+    for year in years:
+        start_date = pd.Timestamp(year=year, month=4, day=29)
+        end_date = pd.Timestamp(year=year, month=5, day=5)
+        df.loc[df[date_col].between(start_date, end_date), GOLDEN_WEEK_FLG] = 1
 
     return df
 
@@ -126,7 +118,6 @@ def add_opened_recently_flg(
     df = df.merge(open_dates, left_on=id_col, right_index=True, how="left")
 
     threshold = df[date_col] - pd.DateOffset(months=n_month)
-
     df[OPENED_RECENTLY_FLG] = (df[OPEN_DATE_COL] >= threshold).astype(int)
 
     return df
@@ -156,9 +147,6 @@ def add_days_since_last_record(
     df[DAYS_SINCE_LAST_RECORD] = base + position
 
     return df.reset_index(drop=True)
-
-
-import pandas as pd
 
 
 def add_time_based_target_encoding(
@@ -243,15 +231,13 @@ def add_neighbors_reserves(
 ) -> pd.DataFrame:
     df = df.copy()
 
-    grp_sum = df.groupby([region_col, VISIT_DATE_COL])[reserves_col].transform("sum")
-    grp_count = df.groupby([region_col, VISIT_DATE_COL])[reserves_col].transform(
-        "count"
-    )
+    grouped = df.groupby([region_col, VISIT_DATE_COL])[reserves_col]
+    grp_sum = grouped.transform("sum")
+    grp_count = grouped.transform("count")
 
     if exclude_self:
-        neigh_sum = grp_sum - df[reserves_col]
         neigh_count = grp_count - 1
-        neigh_mean = neigh_sum / neigh_count
+        neigh_mean = (grp_sum - df[reserves_col]) / neigh_count
         neigh_mean = neigh_mean.where(neigh_count > 0, np.nan)
     else:
         neigh_mean = grp_sum / grp_count
@@ -262,17 +248,20 @@ def add_neighbors_reserves(
     df[neighbor_col] = neigh_mean
     return df
 
-def add_total_reserves(df_visit: pd.DataFrame, air_res: pd.DataFrame, hpg_res: pd.DataFrame, region_col: str) -> pd.DataFrame:
+
+def add_total_reserves(
+    df_visit: pd.DataFrame,
+    air_res: pd.DataFrame,
+    hpg_res: pd.DataFrame,
+    region_col: str,
+) -> pd.DataFrame:
     df = df_visit.copy()
-    df = df.merge(
-        air_res,
-        on=[AIR_RESTAURANT_ID_COL, VISIT_DATE_COL, region_col],
-        how="left"
-    ).merge(
-        hpg_res,
-        on=[AIR_RESTAURANT_ID_COL, VISIT_DATE_COL, region_col],
-        how="left"
-    ).drop(HPG_RESTAURANT_ID_COL, axis=1)
+    merge_columns = [AIR_RESTAURANT_ID_COL, VISIT_DATE_COL, region_col]
+    df = (
+        df.merge(air_res, on=merge_columns, how="left")
+        .merge(hpg_res, on=merge_columns, how="left")
+        .drop(HPG_RESTAURANT_ID_COL, axis=1)
+    )
     cols = [RESERVE_AIR, RESERVE_HPG, RESERVE_AIR_NEIGHBORS]
     df[cols] = df[cols].fillna(0)
     df[TOTAL_RESERVES] = df[RESERVE_AIR] + df[RESERVE_HPG]
@@ -280,18 +269,109 @@ def add_total_reserves(df_visit: pd.DataFrame, air_res: pd.DataFrame, hpg_res: p
 
     return df
 
-def add_total_neigh_reserves(df_visit: pd.DataFrame, hpg_res: pd.DataFrame, region_col: str) -> pd.DataFrame:
+
+def add_total_neigh_reserves(
+    df_visit: pd.DataFrame, hpg_res: pd.DataFrame, region_col: str
+) -> pd.DataFrame:
     df = df_visit.copy()
     df = df.merge(
-        hpg_res.groupby([VISIT_DATE_COL, region_col])[RESERVE_HPG_NEIGHBORS].median().rename('temp'),
+        hpg_res.groupby([VISIT_DATE_COL, region_col])[RESERVE_HPG_NEIGHBORS]
+        .median()
+        .rename("temp"),
         left_on=[VISIT_DATE_COL, region_col],
         right_index=True,
-        how="left"
+        how="left",
     )
     mask = df[RESERVE_HPG_NEIGHBORS].isna()
-    df.loc[mask, RESERVE_HPG_NEIGHBORS] = df.loc[mask, 'temp']
-    df.drop('temp', axis=1, inplace=True)
+    df.loc[mask, RESERVE_HPG_NEIGHBORS] = df.loc[mask, "temp"]
+    df.drop("temp", axis=1, inplace=True)
     df[TOTAL_RESERVES_NEIGHBORS] = df[RESERVE_HPG_NEIGHBORS] + df[RESERVE_AIR_NEIGHBORS]
     df.drop([RESERVE_HPG_NEIGHBORS, RESERVE_AIR_NEIGHBORS], axis=1, inplace=True)
 
+    return df
+
+
+def rolling_agg(
+    s: pd.Series, window: int, agg: str = "mean", **agg_kwargs
+) -> pd.Series:
+    s = s.shift(1)
+
+    if not EXCLUDE_ZEROS:
+        return s.rolling(window, min_periods=window).agg(agg, **agg_kwargs)
+
+    s_nonzero = s.replace(0, np.nan)
+    res = s_nonzero.rolling(window, min_periods=window).agg(agg, **agg_kwargs)
+
+    count_nonzero = s.ne(0).rolling(window, min_periods=window).sum()
+    res = res.mask(count_nonzero == 0, 0)
+
+    return res
+
+
+def add_rolling_agg(
+    df: pd.DataFrame,
+    rolling_col: str,
+    id_col: str,
+    target_col: str,
+    window: int,
+    agg: str,
+    **agg_kwargs,
+) -> pd.DataFrame:
+    grouping = df.groupby(id_col)[target_col]
+
+    df[rolling_col] = grouping.transform(
+        lambda x: rolling_agg(x, window, agg=agg, **agg_kwargs)
+    )
+
+    return df
+
+
+def add_basic_stats(
+    df: pd.DataFrame, target_col: str, id_col: str, windows: list = None
+) -> pd.DataFrame:
+    if windows is None:
+        windows = [7, 14, 28]
+
+    df = df.copy().sort_values(VISIT_DATE_COL)
+
+    args = [
+        ("mean", {}),
+        ("median", {}),
+        ("std", {"ddof": 0}),
+    ]
+
+    for window in windows:
+        for agg_name, agg_kwargs in args:
+            df = add_rolling_agg(
+                df,
+                rolling_col=f"{target_col}_{agg_name}_{window}",
+                id_col=id_col,
+                target_col=target_col,
+                window=window,
+                agg=agg_name,
+                **agg_kwargs,
+            )
+
+    return df
+
+
+def add_neighbors_stats(
+    df: pd.DataFrame,
+    target_col: str,
+    grouping_col: str,
+):
+    orig_df = df
+    df = df.copy()[[VISIT_DATE_COL, grouping_col, target_col]]
+    neigh_target = target_col + "_neighbors"
+    df.rename(columns={target_col: neigh_target}, inplace=True)
+
+    if EXCLUDE_ZEROS:
+        df[neigh_target] = df[neigh_target].replace(0, np.nan)
+
+    means = df.groupby([VISIT_DATE_COL, grouping_col])[neigh_target].mean()
+    # replace NaN with 0 so that rolling_agg returns 0 when the window contains only zeros
+    means = means.replace(np.nan, 0)
+    res = add_basic_stats(means.reset_index(), neigh_target, grouping_col)
+
+    df = orig_df.merge(res, on=[VISIT_DATE_COL, grouping_col], how="left")
     return df

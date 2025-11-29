@@ -99,4 +99,6 @@ RESERVE_HPG_NEIGHBORS = RESERVE_HPG + "_neighbors"
 TOTAL_RESERVES = "total_reserves_sum"
 TOTAL_RESERVES_NEIGHBORS = TOTAL_RESERVES + "_neighbors"
 
+# Flags
 
+EXCLUDE_ZEROS = True

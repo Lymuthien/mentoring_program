@@ -22,15 +22,11 @@ def print_intersection(ids: UniqueIds, name1: str, name2: str):
     print(f"{name1} & {name2} intersection: {len(set1 & set2)}")
 
 
-def mean_by_group(df: pd.DataFrame, grouping_col: str, col: str):
-    return df.groupby(grouping_col)[col].mean()
-
-
 def get_dfs_daily_corr(
     air_df: pd.DataFrame, hpg_df: pd.DataFrame, visit_col: str, visitors_col: str
 ) -> tuple[float, pd.DataFrame]:
-    air_daily = mean_by_group(air_df.reset_index(), visit_col, visitors_col)
-    hpg_daily = mean_by_group(hpg_df.reset_index(), visit_col, visitors_col)
+    air_daily = air_df.reset_index().groupby(visit_col)[visitors_col].mean()
+    hpg_daily = hpg_df.reset_index().groupby(visit_col)[visitors_col].mean()
 
     combined = pd.concat(
         [air_daily.rename(AIR_DAILY_COL), hpg_daily.rename(HPG_DAILY_COL)], axis=1

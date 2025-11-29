@@ -1,8 +1,4 @@
 from enum import Enum
-from pathlib import Path
-
-from loguru import logger
-from tqdm import tqdm
 import typer
 import pandas as pd
 
@@ -96,6 +92,3 @@ def fill_missing_dates(
 
     merged = merged.sort_values([id_col, date_col]).reset_index(drop=True)
     return merged
-
-
-app = typer.Typer()

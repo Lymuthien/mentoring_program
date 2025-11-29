@@ -1,7 +1,3 @@
-from pathlib import Path
-
-from loguru import logger
-from tqdm import tqdm
 import typer
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -9,8 +5,6 @@ from functools import wraps
 
 
 from recruit_restaurant_visitor_forecasting.config import (
-    FIGURES_DIR,
-    PROCESSED_DATA_DIR,
     PERCENTAGE_COL,
     VISIT_DATE_COL,
     VISITORS_DIFF_COL,
@@ -21,9 +15,6 @@ from recruit_restaurant_visitor_forecasting.config import (
     DAY_OF_WEEK_COL,
     MONTH_COLORS,
 )
-from recruit_restaurant_visitor_forecasting.utils import mean_by_group
-
-app = typer.Typer()
 
 def show_figure(figsize=(10, 6)):
     def decorator(func):
@@ -88,7 +79,7 @@ def plot_daily_corr(df: pd.DataFrame, col1: str, col2: str) -> None:
 
 
 def plot_mean_by_date(df: pd.DataFrame):
-    mean = mean_by_group(df, VISIT_DATE_COL, VISITORS_DIFF_COL)
+    mean = df.groupby(VISIT_DATE_COL)[VISITORS_DIFF_COL].mean()
     mean.plot(
         xlabel="Date",
         ylabel="Difference",
