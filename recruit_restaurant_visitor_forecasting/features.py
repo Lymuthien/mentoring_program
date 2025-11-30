@@ -28,6 +28,8 @@ from recruit_restaurant_visitor_forecasting.config import (
     RESERVE_HPG_NEIGHBORS,
     TOTAL_RESERVES_NEIGHBORS,
     EXCLUDE_ZEROS,
+    DAYS_OF_WEEK,
+    OPEN_USUALLY,
 )
 
 
@@ -36,14 +38,14 @@ def get_first_str_values(s: pd.Series, n: int, sep: str = " ") -> pd.Series:
 
 
 def get_opened_restaurants_pct(
-    df: pd.DataFrame, visit_col: str, store_col: str
+    df: pd.DataFrame, visit_col: str, id_col: str
 ) -> pd.DataFrame:
-    min_dates = df.reset_index().groupby(store_col)[visit_col].min()
+    min_dates = df.reset_index().groupby(id_col)[visit_col].min()
     cumulative_restaurants = (
         min_dates.sort_values().value_counts().sort_index().cumsum()
     )
 
-    daily_restaurants = df.groupby(visit_col)[store_col].nunique()
+    daily_restaurants = df.groupby(visit_col)[id_col].nunique()
 
     df_pct = pd.DataFrame(
         {
@@ -56,6 +58,52 @@ def get_opened_restaurants_pct(
     df_pct[PERCENTAGE_COL] = df_pct["daily_count"] / df_pct["total_existing"] * 100
 
     return df_pct
+
+
+def get_open_by_weekday_pct(
+    df: pd.DataFrame, id_col: str, visit_col: str, visitors_col: str
+) -> pd.DataFrame:
+    df = df.copy()
+
+    grouped = df.groupby([id_col, df[visit_col].dt.dayofweek])
+    count = grouped.size()
+    nonzero_count = grouped[visitors_col].apply(lambda s: s.ne(0).sum())
+
+    pct_df = (nonzero_count / count).unstack(fill_value=0)
+    cols_map = {i: day for i, day in enumerate(DAYS_OF_WEEK)}
+    pct_df = pct_df.rename(columns=cols_map).reset_index()
+
+    return pct_df
+
+
+def get_open_status(pct_df: pd.DataFrame, threshold_ratio: float = 0.5):
+    pct_df = pct_df.copy()
+    pct_df["max_pct"] = pct_df[DAYS_OF_WEEK].max(axis=1)
+
+    for day in DAYS_OF_WEEK:
+        pct_df[f"{day}_open"] = (
+            pct_df[day] >= threshold_ratio * pct_df["max_pct"]
+        ).astype(int)
+
+    pct_df = pct_df.drop(["max_pct", *DAYS_OF_WEEK], axis=1)
+
+    return pct_df
+
+
+def add_open_usually(df: pd.DataFrame, drop_days: bool = True):
+    df = df.copy()
+
+    def get_open(row):
+        day = row[DAY_OF_WEEK_COL]
+        col_name = f"{day}_open"
+        return row[col_name]
+
+    df[OPEN_USUALLY] = df.apply(get_open, axis=1)
+
+    if drop_days:
+        open_flags = [day + "_open" for day in DAYS_OF_WEEK]
+        df = df.drop(open_flags, axis=1)
+    return df
 
 
 def add_seasonal_columns(df: pd.DataFrame):

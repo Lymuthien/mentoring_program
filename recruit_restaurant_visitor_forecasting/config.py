@@ -85,7 +85,7 @@ MONTH_COLORS = np.random.choice(list(mpl.colors.XKCD_COLORS.keys()), 12, replace
 CITY_REGION_COL = "city_region"
 CITY_COL = "city"
 GOLDEN_WEEK_FLG = "golden_week_flg"
-OPENED_RECENTLY_FLG = "opened_within_last_six_months_flg"
+OPENED_RECENTLY_FLG = "opened_recently"
 OPEN_DATE_COL = "open_date"
 DAYS_FROM_HOL_COL = "days_from_holiday"
 IS_OPENED = "is_open_flg"
@@ -98,6 +98,8 @@ RESERVE_AIR_NEIGHBORS = RESERVE_AIR + "_neighbors"
 RESERVE_HPG_NEIGHBORS = RESERVE_HPG + "_neighbors"
 TOTAL_RESERVES = "total_reserves_sum"
 TOTAL_RESERVES_NEIGHBORS = TOTAL_RESERVES + "_neighbors"
+DAYS_OF_WEEK = ["Mon", "Tue", "Wed", "Th", "Fri", "Sat", "Sun"]
+OPEN_USUALLY = "open_usually"
 
 # Flags
 
