@@ -15,7 +15,6 @@ from recruit_restaurant_visitor_forecasting.config import (
     HOLIDAY_COL,
     OPENED_RECENTLY_FLG,
     OPEN_DATE_COL,
-    IS_OPENED,
     DAYS_SINCE_LAST_RECORD,
     AIR_RESTAURANT_ID_COL,
     HPG_RESTAURANT_ID_COL,
@@ -27,7 +26,6 @@ from recruit_restaurant_visitor_forecasting.config import (
     TOTAL_RESERVES,
     RESERVE_HPG_NEIGHBORS,
     TOTAL_RESERVES_NEIGHBORS,
-    EXCLUDE_ZEROS,
     DAYS_OF_WEEK,
     OPEN_USUALLY,
 )
@@ -171,20 +169,13 @@ def add_opened_recently_flg(
     return df
 
 
-def add_open_flg(df: pd.DataFrame, visitors_col: str):
-    df = df.copy()
-    df[IS_OPENED] = (df[visitors_col] > 0).astype(int)
-
-    return df
-
-
 def add_days_since_last_record(
     df: pd.DataFrame, id_col: str, date_col: str
 ) -> pd.DataFrame:
     df = df.copy()
     df.sort_values([id_col, date_col], inplace=True)
 
-    is_open = df[IS_OPENED]
+    is_open = df[OPEN_USUALLY]
     prev_is_open = is_open.groupby(df[id_col]).shift(1).fillna(0)
     seg = prev_is_open.groupby(df[id_col]).cumsum()
     position = df.groupby([df[id_col], seg]).cumcount().astype(int)
@@ -340,18 +331,20 @@ def add_total_neigh_reserves(
 
 
 def rolling_agg(
-    s: pd.Series, window: int, agg: str = "mean", **agg_kwargs
+    s: pd.Series, window: int, agg: str, open_usually: pd.Series | None = None, **agg_kwargs
 ) -> pd.Series:
     s = s.shift(1)
 
-    if not EXCLUDE_ZEROS:
-        return s.rolling(window, min_periods=window).agg(agg, **agg_kwargs)
+    if open_usually is not None:
+        ou = open_usually.loc[s.index]
+        s_nonzero = s.copy()
+        mask_replace = (ou == 0) & (s_nonzero == 0)
+        if mask_replace.any():
+            s_nonzero.loc[mask_replace] = np.nan
+    else:
+        s_nonzero = s
 
-    s_nonzero = s.replace(0, np.nan)
-    res = s_nonzero.rolling(window, min_periods=window).agg(agg, **agg_kwargs)
-
-    count_nonzero = s.ne(0).rolling(window, min_periods=window).sum()
-    res = res.mask(count_nonzero == 0, 0)
+    res = s_nonzero.rolling(window, min_periods=1).agg(agg, **agg_kwargs)
 
     return res
 
@@ -365,10 +358,11 @@ def add_rolling_agg(
     agg: str,
     **agg_kwargs,
 ) -> pd.DataFrame:
+    open_s = df[OPEN_USUALLY] if OPEN_USUALLY in df.columns else None
     grouping = df.groupby(id_col)[target_col]
 
     df[rolling_col] = grouping.transform(
-        lambda x: rolling_agg(x, window, agg=agg, **agg_kwargs)
+        lambda x: rolling_agg(x, window, agg, open_s, **agg_kwargs)
     )
 
     return df
@@ -409,16 +403,16 @@ def add_neighbors_stats(
     grouping_col: str,
 ):
     orig_df = df
-    df = df.copy()[[VISIT_DATE_COL, grouping_col, target_col]]
+    df = df.copy()[[VISIT_DATE_COL, grouping_col, target_col, OPEN_USUALLY]]
     neigh_target = target_col + "_neighbors"
     df.rename(columns={target_col: neigh_target}, inplace=True)
 
-    if EXCLUDE_ZEROS:
-        df[neigh_target] = df[neigh_target].replace(0, np.nan)
+    mask_replace = (df[OPEN_USUALLY] == 0) & (df[neigh_target] == 0)
+    if mask_replace.any():
+        df.loc[mask_replace, neigh_target] = np.nan
+    df.drop(columns=[OPEN_USUALLY], inplace=True)
 
     means = df.groupby([VISIT_DATE_COL, grouping_col])[neigh_target].mean()
-    # replace NaN with 0 so that rolling_agg returns 0 when the window contains only zeros
-    means = means.replace(np.nan, 0)
     res = add_basic_stats(means.reset_index(), neigh_target, grouping_col)
 
     df = orig_df.merge(res, on=[VISIT_DATE_COL, grouping_col], how="left")
