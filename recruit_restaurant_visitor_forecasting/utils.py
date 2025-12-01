@@ -1,25 +1,6 @@
 import pandas as pd
 import statsmodels.api as sm
 from recruit_restaurant_visitor_forecasting.config import AIR_DAILY_COL, HPG_DAILY_COL
-from IPython.display import display
-
-type DatasetInfo = tuple[pd.DataFrame, str, str]
-type UniqueIds = dict[str, set]
-
-
-def compute_unique(datasets: list[DatasetInfo]) -> UniqueIds:
-    result = {}
-    for df, name, col in datasets:
-        ids = set(df[col].unique())
-        result[name] = ids
-        print(f"{name} unique restaurants ids: {len(ids)}")
-    return result
-
-
-def print_intersection(ids: UniqueIds, name1: str, name2: str):
-    set1 = ids[name1]
-    set2 = ids[name2]
-    print(f"{name1} & {name2} intersection: {len(set1 & set2)}")
 
 
 def get_dfs_daily_corr(
@@ -34,10 +15,6 @@ def get_dfs_daily_corr(
     corr = combined[AIR_DAILY_COL].corr(combined[HPG_DAILY_COL])
 
     return corr, combined
-
-
-def print_df_len(df: pd.DataFrame, df_str: str):
-    print(df_str, "count of rows:", df.shape[0])
 
 
 def find_reservations_exceed_visitors(
@@ -68,23 +45,10 @@ def find_reservations_exceed_visitors(
     return problematic_rows, merged_df
 
 
-def print_problematic_rows(problematic_rows: pd.DataFrame):
-    print(f"Found {len(problematic_rows)} problematic rows")
-    display(problematic_rows.head())
-
-
 def filter_by_column_comparison(
     df: pd.DataFrame, greater_column: str, smaller_column: str
 ) -> pd.DataFrame:
     return df[df[greater_column] > df[smaller_column]]
-
-
-def print_low_frequency_values(df: pd.DataFrame, col: str, frequency: int) -> None:
-    counts = df[col].value_counts()
-    print(
-        f"Values with frequency less than {frequency}: ",
-        len(counts[counts <= frequency]),
-    )
 
 
 def compute_acf(df: pd.DataFrame, col: str, nlags: int = 7) -> pd.DataFrame:
