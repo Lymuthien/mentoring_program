@@ -418,3 +418,26 @@ def add_neighbors_stats(
 
     df = orig_df.merge(res, on=[VISIT_DATE_COL, grouping_col], how="left")
     return df
+
+
+def add_last_month_visitors(
+    df: pd.DataFrame,
+    target_col: str = VISITORS_COL,
+    reference_df: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    feature_col = target_col + "_last_month"
+
+    df = df.copy()
+    ref_df = df if reference_df is None else reference_df
+    lookup_date_col = "_last_month_date"
+
+    df[lookup_date_col] = df[VISIT_DATE_COL] - pd.DateOffset(months=1)
+    lookup = (
+        ref_df[[AIR_RESTAURANT_ID_COL, VISIT_DATE_COL, target_col]]
+        .rename(columns={VISIT_DATE_COL: lookup_date_col, target_col: feature_col})
+    )
+
+    df = df.merge(lookup, on=[AIR_RESTAURANT_ID_COL, lookup_date_col], how="left")
+    df.drop(columns=lookup_date_col, inplace=True)
+
+    return df
