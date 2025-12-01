@@ -422,7 +422,7 @@ def add_neighbors_stats(
 
 def add_last_month_visitors(
     df: pd.DataFrame,
-    target_col: str = VISITORS_COL,
+    target_col,
     reference_df: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     feature_col = target_col + "_last_month"
@@ -441,3 +441,4 @@ def add_last_month_visitors(
     df.drop(columns=lookup_date_col, inplace=True)
 
     return df
+
