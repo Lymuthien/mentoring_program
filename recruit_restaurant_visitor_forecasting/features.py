@@ -15,19 +15,19 @@ from recruit_restaurant_visitor_forecasting.config import (
     HOLIDAY_COL,
     OPENED_RECENTLY_FLG,
     OPEN_DATE_COL,
-    DAYS_SINCE_LAST_RECORD,
+    DAYS_SINCE_LAST_RECORD_COL,
     AIR_RESTAURANT_ID_COL,
     HPG_RESTAURANT_ID_COL,
     VISIT_DATE_COL,
     RESERVE_VISITORS_COL,
-    RESERVE_AIR,
-    RESERVE_HPG,
-    RESERVE_AIR_NEIGHBORS,
-    TOTAL_RESERVES,
-    RESERVE_HPG_NEIGHBORS,
-    TOTAL_RESERVES_NEIGHBORS,
+    RESERVE_AIR_COL,
+    RESERVE_HPG_COL,
+    RESERVE_AIR_NBR_COL,
+    TOTAL_RESERVES_COL,
+    RESERVE_HPG_NBR_COL,
+    TOTAL_RESERVES_NBR_COL,
     DAYS_OF_WEEK,
-    OPEN_USUALLY,
+    OPEN_USUALLY_COL,
 )
 
 
@@ -96,7 +96,7 @@ def add_open_usually(df: pd.DataFrame, drop_days: bool = True):
         col_name = f"{day}_open"
         return row[col_name]
 
-    df[OPEN_USUALLY] = df.apply(get_open, axis=1)
+    df[OPEN_USUALLY_COL] = df.apply(get_open, axis=1)
 
     if drop_days:
         open_flags = [day + "_open" for day in DAYS_OF_WEEK]
@@ -175,7 +175,7 @@ def add_days_since_last_record(
     df = df.copy()
     df.sort_values([id_col, date_col], inplace=True)
 
-    is_open = df[OPEN_USUALLY]
+    is_open = df[OPEN_USUALLY_COL]
     prev_is_open = is_open.groupby(df[id_col]).shift(1).fillna(0)
     seg = prev_is_open.groupby(df[id_col]).cumsum()
     position = df.groupby([df[id_col], seg]).cumcount().astype(int)
@@ -183,7 +183,7 @@ def add_days_since_last_record(
     first_is_open = is_open.groupby([df[id_col], seg]).transform("first").astype(bool)
     base = np.where(first_is_open, 0, 1)
 
-    df[DAYS_SINCE_LAST_RECORD] = base + position
+    df[DAYS_SINCE_LAST_RECORD_COL] = base + position
 
     return df.reset_index(drop=True)
 
@@ -200,7 +200,7 @@ def add_time_based_target_encoding(
     train_df = train_df.copy()
     test_df = test_df.copy()
 
-    mask = (train_df[OPEN_USUALLY] == 1) | (train_df[target_col] > 0)
+    mask = (train_df[OPEN_USUALLY_COL] == 1) | (train_df[target_col] > 0)
     stats_df = train_df[mask].copy()
 
     daily = stats_df.groupby(date_col)[target_col].agg(["sum", "count"]).reset_index()
@@ -302,10 +302,10 @@ def add_total_reserves(
         .merge(hpg_res, on=merge_columns, how="left")
         .drop(HPG_RESTAURANT_ID_COL, axis=1)
     )
-    cols = [RESERVE_AIR, RESERVE_HPG, RESERVE_AIR_NEIGHBORS]
+    cols = [RESERVE_AIR_COL, RESERVE_HPG_COL, RESERVE_AIR_NBR_COL]
     df[cols] = df[cols].fillna(0)
-    df[TOTAL_RESERVES] = df[RESERVE_AIR] + df[RESERVE_HPG]
-    df.drop([RESERVE_AIR, RESERVE_HPG], axis=1, inplace=True)
+    df[TOTAL_RESERVES_COL] = df[RESERVE_AIR_COL] + df[RESERVE_HPG_COL]
+    df.drop([RESERVE_AIR_COL, RESERVE_HPG_COL], axis=1, inplace=True)
 
     return df
 
@@ -315,18 +315,18 @@ def add_total_neigh_reserves(
 ) -> pd.DataFrame:
     df = df_visit.copy()
     df = df.merge(
-        hpg_res.groupby([VISIT_DATE_COL, region_col])[RESERVE_HPG_NEIGHBORS]
+        hpg_res.groupby([VISIT_DATE_COL, region_col])[RESERVE_HPG_NBR_COL]
         .median()
         .rename("temp"),
         left_on=[VISIT_DATE_COL, region_col],
         right_index=True,
         how="left",
     )
-    mask = df[RESERVE_HPG_NEIGHBORS].isna()
-    df.loc[mask, RESERVE_HPG_NEIGHBORS] = df.loc[mask, "temp"]
+    mask = df[RESERVE_HPG_NBR_COL].isna()
+    df.loc[mask, RESERVE_HPG_NBR_COL] = df.loc[mask, "temp"]
     df.drop("temp", axis=1, inplace=True)
-    df[TOTAL_RESERVES_NEIGHBORS] = df[RESERVE_HPG_NEIGHBORS] + df[RESERVE_AIR_NEIGHBORS]
-    df.drop([RESERVE_HPG_NEIGHBORS, RESERVE_AIR_NEIGHBORS], axis=1, inplace=True)
+    df[TOTAL_RESERVES_NBR_COL] = df[RESERVE_HPG_NBR_COL] + df[RESERVE_AIR_NBR_COL]
+    df.drop([RESERVE_HPG_NBR_COL, RESERVE_AIR_NBR_COL], axis=1, inplace=True)
 
     return df
 
@@ -359,7 +359,7 @@ def add_rolling_agg(
     agg: str,
     **agg_kwargs,
 ) -> pd.DataFrame:
-    open_s = df[OPEN_USUALLY] if OPEN_USUALLY in df.columns else None
+    open_s = df[OPEN_USUALLY_COL] if OPEN_USUALLY_COL in df.columns else None
     grouping = df.groupby(id_col)[target_col]
 
     df[rolling_col] = grouping.transform(
@@ -404,14 +404,14 @@ def add_neighbors_stats(
     grouping_col: str,
 ):
     orig_df = df
-    df = df.copy()[[VISIT_DATE_COL, grouping_col, target_col, OPEN_USUALLY]]
+    df = df.copy()[[VISIT_DATE_COL, grouping_col, target_col, OPEN_USUALLY_COL]]
     neigh_target = target_col + "_neighbors"
     df.rename(columns={target_col: neigh_target}, inplace=True)
 
-    mask_replace = (df[OPEN_USUALLY] == 0) & (df[neigh_target] == 0)
+    mask_replace = (df[OPEN_USUALLY_COL] == 0) & (df[neigh_target] == 0)
     if mask_replace.any():
         df.loc[mask_replace, neigh_target] = np.nan
-    df.drop(columns=[OPEN_USUALLY], inplace=True)
+    df.drop(columns=[OPEN_USUALLY_COL], inplace=True)
 
     means = df.groupby([VISIT_DATE_COL, grouping_col])[neigh_target].mean()
     res = add_basic_stats(means.reset_index(), neigh_target, grouping_col)
@@ -442,3 +442,25 @@ def add_last_month_visitors(
 
     return df
 
+
+def add_historical_dow_mean(
+    df: pd.DataFrame,
+    id_col: str,
+    target_col: str,
+    feature_name: str,
+) -> pd.DataFrame:
+
+    df = df.copy()
+
+    df_sorted = df.sort_values([id_col, VISIT_DATE_COL])
+    grouping_keys = [id_col, DAY_OF_WEEK_COL]
+    shifted = df_sorted.groupby(grouping_keys)[target_col].shift(1)
+
+    def expanding_median(series: pd.Series) -> pd.Series:
+        return series.expanding(min_periods=1).mean()
+
+    df_sorted[feature_name] = shifted.groupby(
+        [df_sorted[id_col], df_sorted[DAY_OF_WEEK_COL]]
+    ).transform(expanding_median)
+
+    return df_sorted.sort_index()
