@@ -200,7 +200,8 @@ def add_time_based_target_encoding(
     train_df = train_df.copy()
     test_df = test_df.copy()
 
-    stats_df = train_df[train_df[target_col] > 0].copy()
+    mask = (train_df[OPEN_USUALLY] == 1) | (train_df[target_col] > 0)
+    stats_df = train_df[mask].copy()
 
     daily = stats_df.groupby(date_col)[target_col].agg(["sum", "count"]).reset_index()
     daily["g_cum_sum"] = daily["sum"].cumsum() - daily["sum"]
