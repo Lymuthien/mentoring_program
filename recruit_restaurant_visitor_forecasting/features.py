@@ -15,7 +15,7 @@ from recruit_restaurant_visitor_forecasting.config import (
     HOLIDAY_COL,
     OPENED_RECENTLY_FLG,
     OPEN_DATE_COL,
-    DAYS_SINCE_LAST_RECORD_COL,
+    DAYS_FROM_LAST_VISIT_COL,
     AIR_RESTAURANT_ID_COL,
     HPG_RESTAURANT_ID_COL,
     VISIT_DATE_COL,
@@ -59,11 +59,11 @@ def get_opened_restaurants_pct(
 
 
 def get_open_by_weekday_pct(
-    df: pd.DataFrame, id_col: str, visit_col: str, visitors_col: str
+    df: pd.DataFrame, visit_col: str, visitors_col: str
 ) -> pd.DataFrame:
     df = df.copy()
 
-    grouped = df.groupby([id_col, df[visit_col].dt.dayofweek])
+    grouped = df.groupby([AIR_RESTAURANT_ID_COL, df[visit_col].dt.dayofweek])
     count = grouped.size()
     nonzero_count = grouped[visitors_col].apply(lambda s: s.ne(0).sum())
 
@@ -183,7 +183,7 @@ def add_days_since_last_record(
     first_is_open = is_open.groupby([df[id_col], seg]).transform("first").astype(bool)
     base = np.where(first_is_open, 0, 1)
 
-    df[DAYS_SINCE_LAST_RECORD_COL] = base + position
+    df[DAYS_FROM_LAST_VISIT_COL] = base + position
 
     return df.reset_index(drop=True)
 
@@ -261,11 +261,11 @@ def add_sum_of_reserves(df: pd.DataFrame, output_col: str, id_col: str) -> pd.Da
     return df.reset_index()
 
 
-def add_neighbors_reserves(
+def add_nbrs_reserves(
     df: pd.DataFrame,
     reserves_col: str,
     region_col: str,
-    neighbor_col: str,
+    nbr_col: str,
     exclude_self: bool = True,
     fill_na=None,
 ) -> pd.DataFrame:
@@ -276,16 +276,16 @@ def add_neighbors_reserves(
     grp_count = grouped.transform("count")
 
     if exclude_self:
-        neigh_count = grp_count - 1
-        neigh_mean = (grp_sum - df[reserves_col]) / neigh_count
-        neigh_mean = neigh_mean.where(neigh_count > 0, np.nan)
+        nbr_count = grp_count - 1
+        nbr_mean = (grp_sum - df[reserves_col]) / nbr_count
+        nbr_mean = nbr_mean.where(nbr_count > 0, np.nan)
     else:
-        neigh_mean = grp_sum / grp_count
+        nbr_mean = grp_sum / grp_count
 
     if fill_na is not None:
-        neigh_mean = neigh_mean.fillna(fill_na)
+        nbr_mean = nbr_mean.fillna(fill_na)
 
-    df[neighbor_col] = neigh_mean
+    df[nbr_col] = nbr_mean
     return df
 
 
@@ -310,7 +310,7 @@ def add_total_reserves(
     return df
 
 
-def add_total_neigh_reserves(
+def add_total_nbr_reserves(
     df_visit: pd.DataFrame, hpg_res: pd.DataFrame, region_col: str
 ) -> pd.DataFrame:
     df = df_visit.copy()
@@ -332,7 +332,11 @@ def add_total_neigh_reserves(
 
 
 def rolling_agg(
-    s: pd.Series, window: int, agg: str, open_usually: pd.Series | None = None, **agg_kwargs
+    s: pd.Series,
+    window: int,
+    agg: str,
+    open_usually: pd.Series | None = None,
+    **agg_kwargs,
 ) -> pd.Series:
     s = s.shift(1)
 
@@ -370,21 +374,26 @@ def add_rolling_agg(
 
 
 def add_basic_stats(
-    df: pd.DataFrame, target_col: str, id_col: str, windows: list = None
+    df: pd.DataFrame,
+    target_col: str,
+    id_col: str,
+    aggs: list = None,
+    windows: list = None,
 ) -> pd.DataFrame:
     if windows is None:
         windows = [7, 14, 28]
 
-    df = df.copy().sort_values(VISIT_DATE_COL)
+    df = df.copy().sort_values([id_col, VISIT_DATE_COL])
 
-    args = [
-        ("mean", {}),
-        ("median", {}),
-        ("std", {"ddof": 0}),
-    ]
+    if aggs is None:
+        aggs = [
+            ("mean", {}),
+            ("median", {}),
+            ("std", {"ddof": 0}),
+        ]
 
     for window in windows:
-        for agg_name, agg_kwargs in args:
+        for agg_name, agg_kwargs in aggs:
             df = add_rolling_agg(
                 df,
                 rolling_col=f"{target_col}_{agg_name}_{window}",
@@ -402,19 +411,20 @@ def add_neighbors_stats(
     df: pd.DataFrame,
     target_col: str,
     grouping_col: str,
+    aggs: list = None,
 ):
     orig_df = df
     df = df.copy()[[VISIT_DATE_COL, grouping_col, target_col, OPEN_USUALLY_COL]]
-    neigh_target = target_col + "_neighbors"
-    df.rename(columns={target_col: neigh_target}, inplace=True)
+    nbr_target = target_col + "_nbrs"
+    df.rename(columns={target_col: nbr_target}, inplace=True)
 
-    mask_replace = (df[OPEN_USUALLY_COL] == 0) & (df[neigh_target] == 0)
+    mask_replace = (df[OPEN_USUALLY_COL] == 0) & (df[nbr_target] == 0)
     if mask_replace.any():
-        df.loc[mask_replace, neigh_target] = np.nan
+        df.loc[mask_replace, nbr_target] = np.nan
     df.drop(columns=[OPEN_USUALLY_COL], inplace=True)
 
-    means = df.groupby([VISIT_DATE_COL, grouping_col])[neigh_target].mean()
-    res = add_basic_stats(means.reset_index(), neigh_target, grouping_col)
+    means = df.groupby([VISIT_DATE_COL, grouping_col])[nbr_target].mean()
+    res = add_basic_stats(means.reset_index(), nbr_target, grouping_col, aggs)
 
     df = orig_df.merge(res, on=[VISIT_DATE_COL, grouping_col], how="left")
     return df
@@ -432,9 +442,8 @@ def add_last_month_visitors(
     lookup_date_col = "_last_month_date"
 
     df[lookup_date_col] = df[VISIT_DATE_COL] - pd.DateOffset(months=1)
-    lookup = (
-        ref_df[[AIR_RESTAURANT_ID_COL, VISIT_DATE_COL, target_col]]
-        .rename(columns={VISIT_DATE_COL: lookup_date_col, target_col: feature_col})
+    lookup = ref_df[[AIR_RESTAURANT_ID_COL, VISIT_DATE_COL, target_col]].rename(
+        columns={VISIT_DATE_COL: lookup_date_col, target_col: feature_col}
     )
 
     df = df.merge(lookup, on=[AIR_RESTAURANT_ID_COL, lookup_date_col], how="left")
@@ -445,22 +454,31 @@ def add_last_month_visitors(
 
 def add_historical_dow_mean(
     df: pd.DataFrame,
-    id_col: str,
     target_col: str,
     feature_name: str,
 ) -> pd.DataFrame:
 
     df = df.copy()
 
-    df_sorted = df.sort_values([id_col, VISIT_DATE_COL])
-    grouping_keys = [id_col, DAY_OF_WEEK_COL]
+    df_sorted = df.sort_values([AIR_RESTAURANT_ID_COL, VISIT_DATE_COL])
+    grouping_keys = [AIR_RESTAURANT_ID_COL, DAY_OF_WEEK_COL]
     shifted = df_sorted.groupby(grouping_keys)[target_col].shift(1)
 
     def expanding_median(series: pd.Series) -> pd.Series:
         return series.expanding(min_periods=1).mean()
 
     df_sorted[feature_name] = shifted.groupby(
-        [df_sorted[id_col], df_sorted[DAY_OF_WEEK_COL]]
+        [df_sorted[AIR_RESTAURANT_ID_COL], df_sorted[DAY_OF_WEEK_COL]]
     ).transform(expanding_median)
 
     return df_sorted.sort_index()
+
+
+def add_reserves_difference(
+    df: pd.DataFrame, visitors_col: str, reserve_col: str, feature_col: str
+) -> pd.DataFrame:
+    df = df.copy()
+    diff = df.groupby(AIR_RESTAURANT_ID_COL)[[visitors_col, reserve_col]].shift(1)
+    df[feature_col] = diff[reserve_col] - diff[visitors_col]
+
+    return df
