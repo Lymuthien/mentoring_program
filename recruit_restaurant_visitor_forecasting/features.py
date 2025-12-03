@@ -482,3 +482,47 @@ def add_reserves_difference(
     df[feature_col] = diff[reserve_col] - diff[visitors_col]
 
     return df
+
+
+def add_lags(
+    df: pd.DataFrame,
+    id_col: str,
+    target_col: str,
+    lags: tuple[int, ...],
+) -> pd.DataFrame:
+    df = df.copy()
+    df = df.sort_values([id_col, VISIT_DATE_COL])
+    grouped = df.groupby(id_col)[target_col]
+
+    for lag in lags:
+        col_name = f"{target_col}_lag_{lag}"
+        df[col_name] = grouped.shift(lag)
+
+    return df
+
+
+def add_lags_nbrs(
+    df: pd.DataFrame,
+    id_col: str,
+    target_col: str,
+    lags: tuple[int, ...],
+) -> pd.DataFrame:
+    df = df.copy()
+    df = df.sort_values([id_col, VISIT_DATE_COL])
+
+    df_gr = (
+        df.groupby([id_col, VISIT_DATE_COL])[target_col]
+          .mean()
+          .to_frame()
+    )
+    grouped = df_gr.groupby(level=0)[target_col]
+
+    for lag in lags:
+        col_name = f"{target_col}_lag_{lag}"
+        df_gr[col_name] = grouped.shift(lag)
+
+    df_gr = df_gr.reset_index().drop(target_col, axis=1)
+    df = df.merge(df_gr, on=[id_col, VISIT_DATE_COL], how="left")
+
+    return df
+
