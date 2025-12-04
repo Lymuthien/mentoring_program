@@ -93,3 +93,4 @@ def fill_missing_dates(
 
     merged = merged.sort_values([id_col, date_col]).reset_index(drop=True)
     return merged
+

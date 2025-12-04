@@ -4,14 +4,24 @@ from recruit_restaurant_visitor_forecasting.config import AIR_DAILY_COL, HPG_DAI
 
 
 def get_dfs_daily_corr(
-    air_df: pd.DataFrame, hpg_df: pd.DataFrame, visit_col: str, visitors_col: str
+    air_df: pd.DataFrame,
+    hpg_df: pd.DataFrame,
+    visit_col: str,
+    visitors_col: str,
+    exclude_dates: list = None
 ) -> tuple[float, pd.DataFrame]:
+
     air_daily = air_df.reset_index().groupby(visit_col)[visitors_col].mean()
     hpg_daily = hpg_df.reset_index().groupby(visit_col)[visitors_col].mean()
 
     combined = pd.concat(
         [air_daily.rename(AIR_DAILY_COL), hpg_daily.rename(HPG_DAILY_COL)], axis=1
     )
+
+    if exclude_dates:
+        exclude_dates = pd.to_datetime(exclude_dates)
+        combined = combined[~combined.index.isin(exclude_dates)]
+
     corr = combined[AIR_DAILY_COL].corr(combined[HPG_DAILY_COL])
 
     return corr, combined
