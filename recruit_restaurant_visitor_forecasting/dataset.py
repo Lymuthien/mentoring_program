@@ -71,15 +71,16 @@ def split_reserve_by_date(
 
 
 def fill_missing_dates(
-    df: pd.DataFrame, date_col: str, id_col: str, visitors_col: str
+    df: pd.DataFrame, date_col: str, id_col: str, visitors_col: str, min_dates: pd.Series = None
 ) -> pd.DataFrame:
     df = df.copy()
-    first_dates = df.groupby(id_col)[date_col].min()
+    if min_dates is None:
+        min_dates = df.groupby(id_col)[date_col].min()
 
     global_end = df[date_col].max()
 
     frames = []
-    for store_id, first_date in first_dates.items():
+    for store_id, first_date in min_dates.items():
         if first_date > global_end:
             continue
         dr = pd.date_range(start=first_date, end=global_end, freq="D")

@@ -1,6 +1,6 @@
 import pandas as pd
 import statsmodels.api as sm
-from recruit_restaurant_visitor_forecasting.config import AIR_DAILY_COL, HPG_DAILY_COL
+from recruit_restaurant_visitor_forecasting.config import AIR_DAILY_COL, HPG_DAILY_COL, VISIT_DATE_COL
 
 
 def get_dfs_daily_corr(
@@ -61,13 +61,6 @@ def compute_acf(df: pd.DataFrame, col: str, nlags: int = 7) -> pd.DataFrame:
     )[1:]
 
 
-def find_missed_groups(
-    df_missing: pd.DataFrame, df_full: pd.DataFrame, columns: list[str]
-) -> pd.DataFrame:
-    groups_a = df_full[columns].drop_duplicates()
-    groups_b = df_missing[columns].drop_duplicates()
-
-    merged = groups_a.merge(groups_b, on=columns, how="left", indicator=True)
-
-    only_in_a = merged[merged["_merge"] == "left_only"].drop(columns=["_merge"])
-    return only_in_a
+def get_first_dates(df: pd.DataFrame, id_col: str) -> pd.Series:
+    first_dates = df.groupby(id_col)[VISIT_DATE_COL].min()
+    return first_dates
