@@ -232,8 +232,33 @@ def add_time_based_target_encoding(
         + category_mean.fillna(agg["global_mean"]) * smoothing
     )
 
+    first_dates = agg.groupby(category_col)[date_col].min().reset_index()
+    first_dates.columns = [category_col, "first_date"]
+    
+    min_date = daily[date_col].min()
+    max_date = daily[date_col].max()
+    all_dates = pd.date_range(start=min_date, end=max_date, freq="D")
+    
+    all_categories = agg[category_col].unique()
+    full_index = []
+    for cat in all_categories:
+        first_date = first_dates[first_dates[category_col] == cat]["first_date"].iloc[0]
+        cat_dates = all_dates[all_dates >= first_date]
+        for d in cat_dates:
+            full_index.append({category_col: cat, date_col: d})
+    
+    full_df = pd.DataFrame(full_index)
+    
+    enc_full = full_df.merge(
+        agg[[category_col, date_col, feature_name]],
+        on=[category_col, date_col],
+        how="left"
+    )
+    
+    enc_full[feature_name] = enc_full.groupby(category_col)[feature_name].ffill()
+    
     enc = (
-        agg[[category_col, date_col, feature_name]]
+        enc_full[[category_col, date_col, feature_name]]
         .sort_values([category_col, date_col])
         .reset_index(drop=True)
     )
@@ -503,3 +528,10 @@ def add_lags(
         df = df.assign(**new_cols)
 
     return df
+
+
+def drop_first_month(df: pd.DataFrame) -> pd.DataFrame:
+    open_dates = df[OPEN_DATE_COL]
+    mask = df[VISIT_DATE_COL] >= (open_dates + pd.DateOffset(months=1))
+
+    return df[mask].copy()
