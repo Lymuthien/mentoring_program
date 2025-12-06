@@ -104,7 +104,3 @@ VISITORS_DOW_MEAN_NBR_COL = VISITORS_DOW_MEAN_COL + "_nbrs"
 VISITORS_NBR_COL = VISITORS_COL + "_nbrs"
 RES_VISITORS_DIFF_COL = "res_visitors_diff"
 RES_VISITORS_DIFF_NBR_COL = "nbr_res_visitors_diff"
-
-# Flags
-
-EXCLUDE_ZEROS = True

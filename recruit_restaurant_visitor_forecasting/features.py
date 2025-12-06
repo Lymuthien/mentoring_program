@@ -28,6 +28,8 @@ from recruit_restaurant_visitor_forecasting.config import (
     TOTAL_RESERVES_NBR_COL,
     DAYS_OF_WEEK,
     OPEN_USUALLY_COL,
+    CITY_COL,
+    VISITORS_COL,
 )
 
 
@@ -265,7 +267,7 @@ def add_nbrs_reserves(
     reserves_col: str,
     region_col: str,
     nbr_col: str,
-    exclude_self: bool = True,
+    exclude_self: bool = False,
     fill_na=None,
 ) -> pd.DataFrame:
     df = df.copy()
@@ -391,11 +393,16 @@ def add_neighbors_stats(
     target_col: str,
     grouping_col: str,
     aggs: list = None,
+    rename_col: bool = True
 ):
     orig_df = df
     df = df.copy()[[VISIT_DATE_COL, grouping_col, target_col, OPEN_USUALLY_COL]]
-    nbr_target = target_col + "_nbrs"
-    df.rename(columns={target_col: nbr_target}, inplace=True)
+    if rename_col:
+        nbr_target = target_col + "_nbrs"
+        df.rename(columns={target_col: nbr_target}, inplace=True)
+    else:
+        nbr_target = target_col
+        orig_df = orig_df.drop(columns=[target_col])
 
     mask_replace = (df[OPEN_USUALLY_COL] == 0) & (df[nbr_target] == 0)
     df[nbr_target] = df[nbr_target].where(~mask_replace, np.nan)
