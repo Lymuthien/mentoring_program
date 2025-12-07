@@ -1,21 +1,27 @@
 import pandas as pd
 import statsmodels.api as sm
-from recruit_restaurant_visitor_forecasting.config import AIR_DAILY_COL, HPG_DAILY_COL, VISIT_DATE_COL
+from recruit_restaurant_visitor_forecasting.config import (
+    AIR_DAILY_COL,
+    HPG_DAILY_COL,
+    VISIT_DATE_COL,
+    AIR_RESTAURANT_ID_COL,
+    HPG_RESTAURANT_ID_COL,
+)
+from recruit_restaurant_visitor_forecasting.features import add_sum_of_reserves
 
 
 def get_dfs_daily_corr(
     air_df: pd.DataFrame,
     hpg_df: pd.DataFrame,
-    visit_col: str,
-    visitors_col: str,
     exclude_dates: list = None
 ) -> tuple[float, pd.DataFrame]:
-
-    air_daily = air_df.reset_index().groupby(visit_col)[visitors_col].mean()
-    hpg_daily = hpg_df.reset_index().groupby(visit_col)[visitors_col].mean()
+    air = add_sum_of_reserves(air_df, AIR_DAILY_COL, AIR_RESTAURANT_ID_COL)
+    hpg = add_sum_of_reserves(hpg_df, HPG_DAILY_COL, HPG_RESTAURANT_ID_COL)
+    air_daily = air.groupby(VISIT_DATE_COL)[AIR_DAILY_COL].mean()
+    hpg_daily = hpg.groupby(VISIT_DATE_COL)[HPG_DAILY_COL].mean()
 
     combined = pd.concat(
-        [air_daily.rename(AIR_DAILY_COL), hpg_daily.rename(HPG_DAILY_COL)], axis=1
+        [air_daily, hpg_daily], axis=1
     )
 
     if exclude_dates:
