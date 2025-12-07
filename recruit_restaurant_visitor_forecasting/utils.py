@@ -3,9 +3,8 @@ import statsmodels.api as sm
 from recruit_restaurant_visitor_forecasting.config import (
     AIR_DAILY_COL,
     HPG_DAILY_COL,
-    VISIT_DATE_COL,
-    AIR_RESTAURANT_ID_COL,
     HPG_RESTAURANT_ID_COL,
+    VISIT_DATE_COL,
 )
 from recruit_restaurant_visitor_forecasting.features import add_sum_of_reserves
 

@@ -1,20 +1,22 @@
-import typer
-import pandas as pd
-import matplotlib.pyplot as plt
 from functools import wraps
 
-
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 from recruit_restaurant_visitor_forecasting.config import (
+    DAY_OF_WEEK_COL,
+    DAY_STR_COL,
+    LATITUDE_COL,
+    LONGITUDE_COL,
+    MONTH_COL,
     PERCENTAGE_COL,
     VISIT_DATE_COL,
     VISITORS_DIFF_COL,
-    LONGITUDE_COL,
-    LATITUDE_COL,
-    MONTH_COL,
-    DAY_STR_COL,
-    DAY_OF_WEEK_COL,
-    MONTH_COLORS,
 )
+
+
+MONTH_COLORS = np.random.choice(list(mpl.colors.XKCD_COLORS.keys()), 12, replace=False)
 
 def show_figure(figsize=(10, 6)):
     def decorator(func):

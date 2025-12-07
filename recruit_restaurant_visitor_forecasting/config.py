@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import numpy as np
-import matplotlib as mpl
 from dotenv import load_dotenv
 from loguru import logger
 
@@ -33,23 +32,15 @@ try:
 except ModuleNotFoundError:
     pass
 
-# Df names
-
-AIR_VISIT_STR = "Air visit"
-AIR_RESERVE_STR = "Air reserve"
-HPG_RESERVE_STR = "Hpg reserve"
-AIR_STORE_STR = "Air store"
-HPG_STORE_STR = "Hpg store"
-PERCENTAGE_COL = "percentage"
-SAMPLE_SUBMISSION_STR = "Sample submission"
+np.random.seed(42)
 
 # Column names
 
 AIR_RESTAURANT_ID_COL = "air_store_id"
 HPG_RESTAURANT_ID_COL = "hpg_store_id"
+VISIT_DATE_COL = "visit_date"
 VISIT_DATETIME_COL = "visit_datetime"
 RESERVE_DATETIME_COL = "reserve_datetime"
-VISIT_DATE_COL = "visit_date"
 CALENDAR_DATE_COL = "calendar_date"
 RESERVE_VISITORS_COL = "reserve_visitors"
 VISITORS_COL = "visitors"
@@ -59,11 +50,6 @@ LATITUDE_COL = "latitude"
 LONGITUDE_COL = "longitude"
 AIR_GENRE_COL = "air_genre_name"
 HPG_GENRE_COL = "hpg_genre_name"
-AIR_STORE_REL_STR = AIR_STORE_STR + " relation"
-HPG_STORE_REL_STR = HPG_STORE_STR + " relation"
-VISITORS_DIFF_COL = "visitors_difference"
-AIR_DAILY_COL = "air_daily"
-HPG_DAILY_COL = "hpg_daily"
 HOLIDAY_COL = "holiday_flg"
 
 # Seasonal columns
@@ -76,31 +62,20 @@ DAY_STR_COL = "day_str"
 YEAR_MONTH_COL = "year_month"
 DAY_COL = "day"
 
-np.random.seed(42)
-
-MONTH_COLORS = np.random.choice(list(mpl.colors.XKCD_COLORS.keys()), 12, replace=False)
-
 # Feature columns
 
-CITY_REGION_COL = "city_region"
+VISITORS_DIFF_COL = "visitors_difference"
+AIR_DAILY_COL = "air_daily"
+HPG_DAILY_COL = "hpg_daily"
+PERCENTAGE_COL = "percentage"
 CITY_COL = "city"
-GOLDEN_WEEK_FLG = "golden_week_flg"
-OPENED_RECENTLY_FLG = "opened_recently"
 OPEN_DATE_COL = "open_date"
 DAYS_FROM_HOL_COL = "days_from_holiday"
-DAYS_FROM_LAST_VISIT_COL = "days_from_last_visit"
-GENRE_TE = "air_genre_te"
-AREA_TE = "air_city_te"
 RESERVE_AIR_COL = "air_reserves"
 RESERVE_HPG_COL = "hpg_reserves"
 RESERVE_AIR_NBR_COL = RESERVE_AIR_COL + "_nbrs"
 RESERVE_HPG_NBR_COL = RESERVE_HPG_COL + "_nbrs"
 TOTAL_RESERVES_COL = "total_reserves"
 TOTAL_RESERVES_NBR_COL = TOTAL_RESERVES_COL + "_nbrs"
+
 DAYS_OF_WEEK = ["Mon", "Tue", "Wed", "Th", "Fri", "Sat", "Sun"]
-OPEN_USUALLY_COL = "open_usually"
-VISITORS_DOW_MEAN_COL = "visitors_dow_mean"
-VISITORS_DOW_MEAN_NBR_COL = VISITORS_DOW_MEAN_COL + "_nbrs"
-VISITORS_NBR_COL = VISITORS_COL + "_nbrs"
-RES_VISITORS_DIFF_COL = "res_visitors_diff"
-RES_VISITORS_DIFF_NBR_COL = "nbr_res_visitors_diff"

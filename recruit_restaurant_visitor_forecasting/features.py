@@ -6,15 +6,11 @@ from recruit_restaurant_visitor_forecasting.config import (
     DAY_OF_WEEK_COL,
     DAY_STR_COL,
     DAYS_FROM_HOL_COL,
-    DAYS_FROM_LAST_VISIT_COL,
     DAYS_OF_WEEK,
-    GOLDEN_WEEK_FLG,
     HOLIDAY_COL,
     HPG_RESTAURANT_ID_COL,
     MONTH_COL,
     OPEN_DATE_COL,
-    OPEN_USUALLY_COL,
-    OPENED_RECENTLY_FLG,
     PERCENTAGE_COL,
     RESERVE_AIR_COL,
     RESERVE_AIR_NBR_COL,
@@ -32,6 +28,10 @@ from recruit_restaurant_visitor_forecasting.config import (
 SCALE_COL = "scale"
 AVG_SCALE_COL = "avg_scale"
 EST_AIR_RES_COL = "estimated_air_reserve"
+GOLDEN_WEEK_FLG = "golden_week_flg"
+OPENED_RECENTLY_FLG = "opened_recently"
+DAYS_FROM_LAST_VISIT_COL = "days_from_last_visit"
+OPEN_USUALLY_COL = "open_usually"
 
 
 def get_first_str_values(s: pd.Series, n: int, sep: str = " ") -> pd.Series:

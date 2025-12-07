@@ -1,5 +1,6 @@
-import pandas as pd
 from IPython.display import display
+
+import pandas as pd
 
 type DatasetInfo = tuple[pd.DataFrame, str, str]
 type UniqueIds = dict[str, set]
