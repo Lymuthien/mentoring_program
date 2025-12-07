@@ -81,7 +81,9 @@ def get_open_status(pct_df: pd.DataFrame, threshold_ratio: float = 0.5):
     max_pct = pct_df[DAYS_OF_WEEK].max(axis=1)
     threshold = threshold_ratio * max_pct
 
-    open_cols = {f"{day}_open": (pct_df[day] >= threshold).astype(int) for day in DAYS_OF_WEEK}
+    open_cols = {
+        f"{day}_open": (pct_df[day] >= threshold).astype(int) for day in DAYS_OF_WEEK
+    }
     pct_df = pct_df.assign(**open_cols)
     pct_df = pct_df.drop(DAYS_OF_WEEK, axis=1)
 
@@ -144,12 +146,12 @@ def add_golden_week_flg(df: pd.DataFrame, years: list, date_col: str) -> pd.Data
     df = df.copy()
     dates = df[date_col].values
     mask = np.zeros(len(df), dtype=bool)
-        
+
     for year in years:
         start_date = pd.Timestamp(year=year, month=4, day=29)
         end_date = pd.Timestamp(year=year, month=5, day=5)
         mask |= (dates >= start_date) & (dates <= end_date)
-        
+
     df[GOLDEN_WEEK_FLG] = mask.astype(int)
 
     return df
@@ -195,9 +197,9 @@ def add_time_based_target_encoding(
     train_df: pd.DataFrame,
     test_df: pd.DataFrame,
     category_col: str,
-    date_col: str,
     target_col: str,
     feature_name: str,
+    date_col: str = VISIT_DATE_COL,
     min_samples: int = 30,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     train_df = train_df.copy()
@@ -234,11 +236,11 @@ def add_time_based_target_encoding(
 
     first_dates = agg.groupby(category_col)[date_col].min().reset_index()
     first_dates.columns = [category_col, "first_date"]
-    
+
     min_date = daily[date_col].min()
     max_date = daily[date_col].max()
     all_dates = pd.date_range(start=min_date, end=max_date, freq="D")
-    
+
     all_categories = agg[category_col].unique()
     full_index = []
     for cat in all_categories:
@@ -246,17 +248,17 @@ def add_time_based_target_encoding(
         cat_dates = all_dates[all_dates >= first_date]
         for d in cat_dates:
             full_index.append({category_col: cat, date_col: d})
-    
+
     full_df = pd.DataFrame(full_index)
-    
+
     enc_full = full_df.merge(
         agg[[category_col, date_col, feature_name]],
         on=[category_col, date_col],
-        how="left"
+        how="left",
     )
-    
+
     enc_full[feature_name] = enc_full.groupby(category_col)[feature_name].ffill()
-    
+
     enc = (
         enc_full[[category_col, date_col, feature_name]]
         .sort_values([category_col, date_col])
@@ -399,7 +401,7 @@ def add_basic_stats(
 
     open_s = df[OPEN_USUALLY_COL] if OPEN_USUALLY_COL in df.columns else None
     grouping = df.groupby(id_col)[target_col]
-    
+
     new_cols = {}
     for window in windows:
         for agg_name, agg_kwargs in aggs:
@@ -407,7 +409,7 @@ def add_basic_stats(
             new_cols[col_name] = grouping.transform(
                 lambda x: rolling_agg(x, window, agg_name, open_s, **agg_kwargs)
             )
-    
+
     df = df.assign(**new_cols)
 
     return df
@@ -418,7 +420,7 @@ def add_neighbors_stats(
     target_col: str,
     grouping_col: str,
     aggs: list = None,
-    rename_col: bool = True
+    rename_col: bool = True,
 ):
     orig_df = df
     df = df.copy()[[VISIT_DATE_COL, grouping_col, target_col, OPEN_USUALLY_COL]]
@@ -471,11 +473,11 @@ def add_historical_dow_mean(
     df = df.copy()
     df_sorted = df.sort_values([AIR_RESTAURANT_ID_COL, VISIT_DATE_COL])
     grouping_keys = [AIR_RESTAURANT_ID_COL, DAY_OF_WEEK_COL]
-    
+
     def shift_and_expanding_mean(series):
         shifted = series.shift(1)
         return shifted.expanding(min_periods=1).mean()
-    
+
     df_sorted[feature_name] = df_sorted.groupby(grouping_keys)[target_col].transform(
         shift_and_expanding_mean
     )
@@ -504,27 +506,17 @@ def add_lags(
     df = df.sort_values([id_col, VISIT_DATE_COL])
 
     if use_nbrs:
-        df_gr = (
-            df.groupby([id_col, VISIT_DATE_COL])[target_col]
-            .mean()
-            .to_frame()
-        )
+        df_gr = df.groupby([id_col, VISIT_DATE_COL])[target_col].mean().to_frame()
         grouped = df_gr.groupby(level=0)[target_col]
-        
-        new_cols = {
-            f"{target_col}_lag_{lag}": grouped.shift(lag)
-            for lag in lags
-        }
+
+        new_cols = {f"{target_col}_lag_{lag}": grouped.shift(lag) for lag in lags}
         df_gr = df_gr.assign(**new_cols)
         df_gr = df_gr.reset_index().drop(target_col, axis=1)
         df = df.merge(df_gr, on=[id_col, VISIT_DATE_COL], how="left")
     else:
         grouped = df.groupby(id_col)[target_col]
-        
-        new_cols = {
-            f"{target_col}_lag_{lag}": grouped.shift(lag)
-            for lag in lags
-        }
+
+        new_cols = {f"{target_col}_lag_{lag}": grouped.shift(lag) for lag in lags}
         df = df.assign(**new_cols)
 
     return df
