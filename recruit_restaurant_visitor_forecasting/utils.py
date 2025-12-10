@@ -54,7 +54,6 @@ def find_reservations_exceed_visitors(
 
     problematic_rows = merged_df[
         (merged_df[visitors_col] < merged_df[reserve_visitors_col])
-        | (merged_df[visitors_col].isna())
     ][[date_col, store_col, visitors_col, reserve_visitors_col]]
 
     return problematic_rows, merged_df
