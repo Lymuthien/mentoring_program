@@ -77,15 +77,16 @@ def fill_missing_dates(
         min_dates = df.groupby(id_col)[date_col].min()
 
     global_end = df[date_col].max()
-
-    frames = []
-    for store_id, first_date in min_dates.items():
-        if first_date > global_end:
-            continue
-        dr = pd.date_range(start=first_date, end=global_end, freq="D")
-        tmp = pd.DataFrame({id_col: store_id, date_col: dr})
-        frames.append(tmp)
-    full_idx = pd.concat(frames, ignore_index=True)
+    min_dates = min_dates[min_dates <= global_end]
+    
+    date_ranges = min_dates.apply(
+        lambda first_date: pd.date_range(start=first_date, end=global_end, freq="D")
+    )
+    full_idx = (
+        date_ranges.reset_index()
+        .explode(date_col)
+        .reset_index(drop=True)
+    )
 
     merged = full_idx.merge(df, how="left", on=[id_col, date_col])
     merged[visitors_col] = merged[visitors_col].fillna(0).astype(int)
