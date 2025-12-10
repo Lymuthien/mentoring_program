@@ -123,22 +123,30 @@ def add_holiday_columns(df: pd.DataFrame, date_col: str):
     df = df.sort_values(date_col).reset_index(drop=True)
 
     inf = np.iinfo(np.int64).max
-    grp_prev = df[HOLIDAY_COL].cumsum()
-    days_since_prev = df.groupby(grp_prev).cumcount()
-    days_since_prev = days_since_prev.where(grp_prev != 0, inf)
+    holiday_mask = df[HOLIDAY_COL] == 1
+    non_holiday_mask = ~holiday_mask
+    result = np.zeros(len(df), dtype=np.int64)
 
-    df_rev = df.iloc[::-1].reset_index(drop=True)
-    grp_next = df_rev[HOLIDAY_COL].cumsum()
-    days_until_next_rev = df_rev.groupby(grp_next).cumcount()
-    days_until_next_rev = days_until_next_rev.where(grp_next.values != 0, inf)
-    days_until_next = days_until_next_rev.iloc[::-1].reset_index(drop=True)
+    holiday_indices = df.index[holiday_mask].values
+    non_holiday_indices = df.index[non_holiday_mask].values
+    next_holiday_pos = np.searchsorted(holiday_indices, non_holiday_indices)
+    prev_holiday_pos = next_holiday_pos - 1
 
-    before_mask = days_until_next < days_since_prev
-    signed = pd.Series(
-        np.where(before_mask, -days_until_next, days_since_prev), index=df.index
+    valid_prev = prev_holiday_pos >= 0
+    days_since_prev = np.full(len(non_holiday_indices), inf, dtype=np.int64)
+    days_since_prev[valid_prev] = (
+        non_holiday_indices[valid_prev] - holiday_indices[prev_holiday_pos[valid_prev]]
     )
 
-    df[DAYS_FROM_HOL_COL] = signed.astype(int)
+    valid_next = next_holiday_pos < len(holiday_indices)
+    days_until_next = np.full(len(non_holiday_indices), inf, dtype=np.int64)
+    days_until_next[valid_next] = (
+        holiday_indices[next_holiday_pos[valid_next]] - non_holiday_indices[valid_next]
+    )
+
+    before_mask = days_until_next < days_since_prev
+    result[non_holiday_mask] = np.where(before_mask, -days_until_next, days_since_prev)
+    df[DAYS_FROM_HOL_COL] = result.astype(np.int64)
 
     return df
 
