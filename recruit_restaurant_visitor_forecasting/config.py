@@ -79,3 +79,6 @@ TOTAL_RESERVES_COL = "total_reserves"
 TOTAL_RESERVES_NBR_COL = TOTAL_RESERVES_COL + "_nbrs"
 
 DAYS_OF_WEEK = ["Mon", "Tue", "Wed", "Th", "Fri", "Sat", "Sun"]
+
+ACTUAL_MEAN = "actual_mean"
+PRED_MEAN = "predicted_mean"

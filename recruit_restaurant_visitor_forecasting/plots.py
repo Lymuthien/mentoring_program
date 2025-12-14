@@ -13,10 +13,13 @@ from recruit_restaurant_visitor_forecasting.config import (
     PERCENTAGE_COL,
     VISIT_DATE_COL,
     VISITORS_DIFF_COL,
+    ACTUAL_MEAN,
+    PRED_MEAN,
 )
 
 
 MONTH_COLORS = np.random.choice(list(mpl.colors.XKCD_COLORS.keys()), 12, replace=False)
+
 
 def show_figure(figsize=(10, 6)):
     def decorator(func):
@@ -30,7 +33,9 @@ def show_figure(figsize=(10, 6)):
             except Exception as e:
                 plt.close()
                 raise e
+
         return wrapper
+
     return decorator
 
 
@@ -51,6 +56,7 @@ def plot_restaurant_mention_hist(
     plt.title(f"{df_str} - {text.capitalize()} visit mention dates - Histogram")
     plt.show()
 
+
 @show_figure(figsize=(10, 6))
 def plot_opened_restaurants(
     df: pd.DataFrame, df_str: str, visit_col: str, store_col: str
@@ -61,6 +67,7 @@ def plot_opened_restaurants(
     plt.ylabel("Count of opened (not missed) restaurants")
     plt.title(f"{df_str} - Not missed restaurants - Time plot")
 
+
 @show_figure(figsize=(10, 6))
 def plot_opened_restaurants_pct(df: pd.DataFrame, df_str: str):
     df[PERCENTAGE_COL].plot()
@@ -70,6 +77,7 @@ def plot_opened_restaurants_pct(df: pd.DataFrame, df_str: str):
         f"{df_str} - Percentage of not missed restaurants (including only mentioned restaurants) - Time plot"
     )
     plt.grid(True)
+
 
 @show_figure(figsize=(14, 5))
 def plot_daily_corr(df: pd.DataFrame, col1: str, col2: str) -> None:
@@ -142,6 +150,7 @@ def subplot_visitors_by_restaurant(
     plt.ylabel("Count of restaurants")
     plt.grid(True, alpha=0.3)
 
+
 @show_figure(figsize=(6, 6))
 def plot_location_scatter(df: pd.DataFrame, df_str: str) -> None:
     plt.scatter(df[LONGITUDE_COL], df[LATITUDE_COL], s=10)
@@ -187,6 +196,7 @@ def plot_top_values_by_col(
     plt.title(
         f"{df_str} - Mean {col} by {value_name} {'anti-top' if ascending else 'top'}"
     )
+
 
 @show_figure(figsize=(10, 6))
 def plot_weekly_seasonality(df: pd.DataFrame, visitors_col: str, title: str):
@@ -235,6 +245,7 @@ def plot_visitors_for_first_period(
     plt.grid(alpha=0.3)
     plt.show()
 
+
 @show_figure(figsize=(10, 6))
 def plot_acf(acf_df: pd.DataFrame, col: str, df_str: str) -> None:
     lags = acf_df.index
@@ -245,3 +256,29 @@ def plot_acf(acf_df: pd.DataFrame, col: str, df_str: str) -> None:
     plt.xlabel("Lag")
     plt.ylabel("ACF")
     plt.title(f"{df_str} - {col} - ACF")
+
+
+def plot_daily_pred(daily: pd.DataFrame, axs, train: bool = True):
+    axs.plot(
+        daily[VISIT_DATE_COL],
+        daily[ACTUAL_MEAN],
+        label="Actual",
+        linewidth=2,
+        alpha=0.7,
+    )
+    axs.plot(
+        daily[VISIT_DATE_COL],
+        daily[PRED_MEAN],
+        label="Predicted",
+        linewidth=2,
+        alpha=0.7,
+        linestyle="--",
+    )
+    axs.set_xlabel("Date")
+    axs.set_ylabel("Average visitors")
+    if train:
+        axs.set_title("Train Set: Average visitors per day")
+    else:
+        axs.set_title("Test Set: Average visitors per day")
+    axs.legend()
+    axs.grid(True, alpha=0.3)

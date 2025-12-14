@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 from recruit_restaurant_visitor_forecasting.config import (
@@ -5,23 +6,21 @@ from recruit_restaurant_visitor_forecasting.config import (
     HPG_DAILY_COL,
     HPG_RESTAURANT_ID_COL,
     VISIT_DATE_COL,
+    ACTUAL_MEAN,
+    PRED_MEAN,
 )
 from recruit_restaurant_visitor_forecasting.features import add_sum_of_reserves
 
 
 def get_dfs_daily_corr(
-    air_df: pd.DataFrame,
-    hpg_df: pd.DataFrame,
-    exclude_dates: list[pd.Timestamp] = None
+    air_df: pd.DataFrame, hpg_df: pd.DataFrame, exclude_dates: list[pd.Timestamp] = None
 ) -> tuple[float, pd.DataFrame]:
     air = add_sum_of_reserves(air_df, AIR_DAILY_COL)
     hpg = add_sum_of_reserves(hpg_df, HPG_DAILY_COL, HPG_RESTAURANT_ID_COL)
     air_daily = air.groupby(VISIT_DATE_COL)[AIR_DAILY_COL].mean()
     hpg_daily = hpg.groupby(VISIT_DATE_COL)[HPG_DAILY_COL].mean()
 
-    combined = pd.concat(
-        [air_daily, hpg_daily], axis=1
-    )
+    combined = pd.concat([air_daily, hpg_daily], axis=1)
 
     if exclude_dates:
         exclude_dates = pd.to_datetime(exclude_dates)
@@ -78,3 +77,33 @@ def compute_acf(df: pd.DataFrame, col: str, nlags: int = 7) -> pd.DataFrame:
 def get_first_dates(df: pd.DataFrame, id_col: str) -> pd.Series:
     first_dates = df.groupby(id_col)[VISIT_DATE_COL].min()
     return first_dates
+
+
+def get_daily_means(
+    dates: pd.DataFrame, values: pd.Series | np.ndarray
+) -> pd.DataFrame:
+    daily_actual = (
+        pd.DataFrame(
+            {
+                "date": dates.values,
+                "actual": values.values if isinstance(values, pd.Series) else values,
+            }
+        )
+        .groupby("date")["actual"]
+        .mean()
+        .reset_index()
+    )
+    return daily_actual
+
+
+def merge_daily_pred(
+    dates: pd.DataFrame, y: pd.Series, y_pred: pd.Series
+) -> pd.DataFrame:
+    daily_actual = get_daily_means(dates, y)
+    daily_actual.columns = [VISIT_DATE_COL, ACTUAL_MEAN]
+    daily_pred = get_daily_means(dates, y_pred)
+    daily_pred.columns = [VISIT_DATE_COL, PRED_MEAN]
+    daily = daily_actual.merge(daily_pred, on=VISIT_DATE_COL)
+    daily = daily.sort_values(VISIT_DATE_COL)
+
+    return daily
