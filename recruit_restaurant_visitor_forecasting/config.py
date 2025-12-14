@@ -77,6 +77,7 @@ RESERVE_AIR_NBR_COL = RESERVE_AIR_COL + "_nbrs"
 RESERVE_HPG_NBR_COL = RESERVE_HPG_COL + "_nbrs"
 TOTAL_RESERVES_COL = "total_reserves"
 TOTAL_RESERVES_NBR_COL = TOTAL_RESERVES_COL + "_nbrs"
+VISITORS_NBR_COL = VISITORS_COL + "_nbrs"
 
 DAYS_OF_WEEK = ["Mon", "Tue", "Wed", "Th", "Fri", "Sat", "Sun"]
 
