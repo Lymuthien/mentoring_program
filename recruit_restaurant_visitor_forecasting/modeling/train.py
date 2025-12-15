@@ -43,7 +43,7 @@ def prepare_features(features: pd.DataFrame) -> pd.DataFrame:
 def create_model_pipeline(
     alpha: float = 1.0,
     use_pca: bool = False,
-    n_components: Optional[int] = None,
+    n_components: Optional[float] = None,
 ) -> Pipeline:
     steps = [("scaler", StandardScaler())]
     if use_pca:
