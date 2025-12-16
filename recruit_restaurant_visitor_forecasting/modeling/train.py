@@ -1,8 +1,9 @@
 from typing import Optional
 
+import numpy as np
 import pandas as pd
 from sklearn.linear_model import Ridge
-from sklearn.model_selection import TimeSeriesSplit, cross_val_score
+from sklearn.model_selection import TimeSeriesSplit, cross_val_score, GridSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
@@ -49,10 +50,42 @@ def create_model_pipeline(
     if use_pca:
         steps.append(("pca", PCA(n_components=n_components)))
 
-    model = Ridge(alpha=alpha, random_state=42)
-    steps.append(("model", model))
+    steps.append(("ridge", Ridge(alpha=alpha, random_state=42)))
 
     return Pipeline(steps)
+
+
+def create_model_gridsearch(
+    param_grid: Optional[dict[str, list]] = None,
+    n_splits: int = 3,
+    scoring: str = "neg_root_mean_squared_error",
+    n_jobs: int = -1,
+    verbose: int = 1,
+) -> GridSearchCV:
+    pipeline = Pipeline(
+        [("scaler", StandardScaler()), ("pca", PCA()), ("ridge", Ridge())]
+    )
+
+    if param_grid is None:
+        param_grid = {
+            "pca__n_components": [None, 0.95, 0.90, 0.85],
+            "ridge__alpha": np.logspace(-3, 3, 13),
+            "ridge__solver": ["auto", "svd", "cholesky", "lsqr"],
+        }
+
+    tscv = TimeSeriesSplit(n_splits=n_splits)
+    grid_search = GridSearchCV(
+        estimator=pipeline,
+        param_grid=param_grid,
+        cv=tscv,
+        scoring=scoring,
+        n_jobs=n_jobs,
+        verbose=verbose,
+        refit=True,
+        return_train_score=False,
+    )
+
+    return grid_search
 
 
 def evaluate_model(
