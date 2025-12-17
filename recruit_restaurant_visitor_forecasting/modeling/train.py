@@ -2,7 +2,12 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import Ridge
+from sklearn.feature_selection import (
+    SelectKBest,
+    mutual_info_regression,
+    SelectFromModel,
+)
+from sklearn.linear_model import Ridge, Lasso
 from sklearn.model_selection import TimeSeriesSplit, cross_val_score, GridSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -63,15 +68,21 @@ def create_model_gridsearch(
     verbose: int = 1,
 ) -> GridSearchCV:
     pipeline = Pipeline(
-        [("scaler", StandardScaler()), ("pca", PCA()), ("ridge", Ridge())]
+        [
+            ("scaler", StandardScaler()),
+            ("selector", SelectFromModel(Lasso(max_iter=5000, random_state=42))),
+            ("ridge", Ridge()),
+        ]
     )
 
     if param_grid is None:
-        param_grid = {
-            "pca__n_components": [None, 0.95, 0.90, 0.85],
-            "ridge__alpha": np.logspace(-3, 3, 13),
-            "ridge__solver": ["auto", "svd", "cholesky", "lsqr"],
-        }
+        param_grid = [
+            {
+                "selector__estimator__alpha": [1e-3, 1e-2, 1e-1],
+                "selector__threshold": ["median", "mean", 1e-4],
+                "ridge__alpha": np.logspace(-3, 3, 7),
+            }
+        ]
 
     tscv = TimeSeriesSplit(n_splits=n_splits)
     grid_search = GridSearchCV(
