@@ -29,22 +29,12 @@ def _clean_merge_columns(df: pd.DataFrame, original_cols: set) -> pd.DataFrame:
     cols_to_rename = {}
 
     x_y_pairs = {}
-    standalone_y = []
-    standalone_x = []
-    
+
     for col in df.columns:
-        if col.endswith('_y'):
+        if col.endswith("_y"):
             base_col = col[:-2]
             x_col = f"{base_col}_x"
-            if x_col in df.columns:
-                x_y_pairs[base_col] = (x_col, col)
-            else:
-                standalone_y.append((base_col, col))
-        elif col.endswith('_x'):
-            base_col = col[:-2]
-            y_col = f"{base_col}_y"
-            if y_col not in df.columns:
-                standalone_x.append((base_col, col))
+            x_y_pairs[base_col] = (x_col, col)
 
     for base_col, (x_col, y_col) in x_y_pairs.items():
         cols_to_drop.append(x_col)
@@ -54,20 +44,9 @@ def _clean_merge_columns(df: pd.DataFrame, original_cols: set) -> pd.DataFrame:
         else:
             cols_to_rename[y_col] = base_col
 
-    for base_col, y_col in standalone_y:
-        if base_col in original_cols:
-            df[base_col] = df[y_col]
-            cols_to_drop.append(y_col)
-        else:
-            cols_to_rename[y_col] = base_col
-
-    for base_col, x_col in standalone_x:
-        if base_col not in original_cols:
-            cols_to_rename[x_col] = base_col
-
     df = df.drop(columns=cols_to_drop)
     df = df.rename(columns=cols_to_rename)
-    
+
     return df
 
 
@@ -78,14 +57,9 @@ def update_features_for_date(
 ) -> pd.DataFrame:
     id_col = AIR_RESTAURANT_ID_COL
 
-    next_date = current_date + pd.DateOffset(days=1)
-    df_next = df[df[VISIT_DATE_COL] == next_date].copy()
-    if len(df_next) == 0:
-        return df_next
-
-    start_date = next_date - pd.DateOffset(months=1)
+    start_date = current_date - pd.DateOffset(months=1)
     df = df[
-        (df[VISIT_DATE_COL] >= start_date) & (df[VISIT_DATE_COL] <= next_date)
+        (df[VISIT_DATE_COL] >= start_date) & (df[VISIT_DATE_COL] <= current_date)
     ].copy()
 
     df = df.sort_values([VISIT_DATE_COL, id_col]).reset_index(drop=True)
@@ -93,9 +67,11 @@ def update_features_for_date(
 
     df = add_basic_stats(df, VISITORS_COL, id_col)
     df = add_neighbors_stats(df, VISITORS_COL, CITY_COL)
-    df = add_last_month_visitors(df, VISITORS_COL)
+    # df = add_last_month_visitors(df, VISITORS_COL)
 
-    df = add_lags(df, id_col, VISITORS_COL, lags, False)
+    # df = add_lags(df, id_col, VISITORS_COL, lags, False)
+    df = add_lags(df, id_col, VISITORS_COL, (1, 7), False)
+
     df = _clean_merge_columns(df, original_cols)
     df = add_lags(df, CITY_COL, VISITORS_NBR_COL, lags, True)
 
@@ -111,7 +87,7 @@ def update_features_for_date(
     df = add_neighbors_stats(df, RES_VISITORS_DIFF_NBR_COL, CITY_COL, aggs, False)
 
     df = _clean_merge_columns(df, original_cols)
-    df_next_updated = df[df[VISIT_DATE_COL] == next_date].copy()
+    df_next_updated = df[df[VISIT_DATE_COL] == current_date].copy()
 
     return df_next_updated
 
@@ -128,7 +104,6 @@ def recursive_predict(
     combined_features = pd.concat(
         [train_features.copy(), test_features.copy()], ignore_index=True
     )
-    combined_features = combined_features.drop(columns=[VISITORS_NBR_COL])
     combined_features[VISITORS_COL] = 0
     combined_features.loc[: len(train_features) - 1, VISITORS_COL] = train_labels.values
     combined_features = combined_features.sort_values(
@@ -139,42 +114,38 @@ def recursive_predict(
     predictions = {}
 
     for date in tqdm(test_dates, desc="Predicting recursively"):
+        combined_features = combined_features.drop(columns=[VISITORS_NBR_COL])
         updated_features = update_features_for_date(
             combined_features.copy(),
             date,
         )
 
         date_mask = combined_features[VISIT_DATE_COL] == date
-        date_indices = combined_features[date_mask].index
 
-        feature_cols = [
-            c
-            for c in updated_features.columns
-            if c not in [id_col, VISIT_DATE_COL, VISITORS_COL]
-        ]
+        feature_cols = updated_features.columns.difference(
+            [id_col, VISIT_DATE_COL, VISITORS_COL]
+        )
 
-        for c in feature_cols:
-            if c not in combined_features:
-                combined_features[c] = np.nan
+        missing_cols = feature_cols.difference(combined_features.columns)
+        combined_features[missing_cols] = np.nan
 
-        updated_features = updated_features.set_index([id_col, VISIT_DATE_COL])
-
-        for orig_idx in date_indices:
-            store_id = combined_features.loc[orig_idx, id_col]
-            feat_date = combined_features.loc[orig_idx, VISIT_DATE_COL]
-            if (store_id, feat_date) in updated_features.index:
-                for col in feature_cols:
-                    if col in updated_features.columns:
-                        combined_features.loc[orig_idx, col] = updated_features.loc[
-                            (store_id, feat_date), col
-                        ]
+        idx_cols = [id_col, VISIT_DATE_COL]
+        combined_features = combined_features.set_index(idx_cols)
+        updated_features = updated_features.set_index(idx_cols)
+        combined_features.update(updated_features[feature_cols])
+        combined_features = combined_features.reset_index()
 
         test_mask = date_mask & (combined_features.index >= len(train_features))
         current_features = combined_features[test_mask].copy()
         X_current = current_features.drop(columns=[*drop_cols, VISITORS_COL])
 
-        y_pred = model.predict(X_current.values)
-        y_pred = np.maximum(y_pred, 0)
+        print(X_current.isna().sum())
+        try:
+            y_pred = model.predict(X_current.values)
+            y_pred = np.maximum(y_pred, 0)
+        except Exception as e:
+            print(e)
+            return X_current
 
         for idx, pred in zip(current_features.index, y_pred):
             store_id = current_features.loc[idx, id_col]
