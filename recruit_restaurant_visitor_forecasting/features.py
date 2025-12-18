@@ -184,22 +184,36 @@ def add_opened_recently_flg(
 
 
 def add_days_since_last_record(
-    df: pd.DataFrame, id_col: str, date_col: str
+    df: pd.DataFrame, id_col: str, date_col: str, history_df: pd.DataFrame = None
 ) -> pd.DataFrame:
     df = df.copy()
-    df.sort_values([id_col, date_col], inplace=True)
 
-    is_open = df[OPEN_USUALLY_COL]
-    prev_is_open = is_open.groupby(df[id_col]).shift(1).fillna(0)
-    seg = prev_is_open.groupby(df[id_col]).cumsum()
-    position = df.groupby([df[id_col], seg]).cumcount().astype(int)
+    if history_df is not None:
+        history_df = history_df.copy()
+        df["_is_current"] = True
+        history_df["_is_current"] = False
+        combined = pd.concat([history_df, df])
+    else:
+        combined = df
+        combined["_is_current"] = True
 
-    first_is_open = is_open.groupby([df[id_col], seg]).transform("first").astype(bool)
+    combined.sort_values([id_col, date_col], inplace=True)
+
+    is_open = combined[OPEN_USUALLY_COL]
+    prev_is_open = is_open.groupby(combined[id_col]).shift(1).fillna(0)
+    seg = prev_is_open.groupby(combined[id_col]).cumsum()
+    position = combined.groupby([combined[id_col], seg]).cumcount().astype(int)
+
+    first_is_open = (
+        is_open.groupby([combined[id_col], seg]).transform("first").astype(bool)
+    )
     base = np.where(first_is_open, 0, 1)
 
-    df[DAYS_FROM_LAST_VISIT_COL] = base + position
+    combined[DAYS_FROM_LAST_VISIT_COL] = base + position
 
-    return df.reset_index(drop=True)
+    result = combined[combined["_is_current"]].drop("_is_current", axis=1)
+
+    return result.reset_index(drop=True)
 
 
 def add_time_based_target_encoding(
@@ -478,21 +492,29 @@ def add_historical_dow_mean(
     df: pd.DataFrame,
     target_col: str,
     feature_name: str,
-) -> pd.DataFrame:
+    test_df: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
 
     df = df.copy()
-    df_sorted = df.sort_values([AIR_RESTAURANT_ID_COL, VISIT_DATE_COL])
+    df = df.sort_values([AIR_RESTAURANT_ID_COL, VISIT_DATE_COL])
     grouping_keys = [AIR_RESTAURANT_ID_COL, DAY_OF_WEEK_COL]
 
     def shift_and_expanding_mean(series):
         shifted = series.shift(1)
         return shifted.expanding(min_periods=1).mean()
 
-    df_sorted[feature_name] = df_sorted.groupby(grouping_keys)[target_col].transform(
+    df[feature_name] = df.groupby(grouping_keys)[target_col].transform(
         shift_and_expanding_mean
     )
 
-    return df_sorted.sort_index()
+    last_values = df.loc[
+        df.groupby(grouping_keys)[VISIT_DATE_COL].idxmax(), [*grouping_keys, feature_name]
+    ].reset_index(drop=True)
+    test_df = test_df.merge(
+        last_values, on=grouping_keys, how="left"
+    )
+
+    return df.sort_index(), test_df
 
 
 def add_reserves_difference(
