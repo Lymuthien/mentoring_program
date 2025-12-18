@@ -46,20 +46,6 @@ def prepare_features(features: pd.DataFrame) -> pd.DataFrame:
     return features
 
 
-def create_model_pipeline(
-    alpha: float = 1.0,
-    use_pca: bool = False,
-    n_components: Optional[float] = None,
-) -> Pipeline:
-    steps = [("scaler", StandardScaler())]
-    if use_pca:
-        steps.append(("pca", PCA(n_components=n_components)))
-
-    steps.append(("ridge", Ridge(alpha=alpha, random_state=42)))
-
-    return Pipeline(steps)
-
-
 def create_model_gridsearch(
     param_grid: Optional[dict[str, list]] = None,
     n_splits: int = 3,
@@ -118,11 +104,9 @@ def evaluate_model(
         scoring="neg_root_mean_squared_error",
         n_jobs=-1,
     )
-
     mae_scores = -cross_val_score(
         model, X_array, y_array, cv=tscv, scoring="neg_mean_absolute_error", n_jobs=-1
     )
-
     r2_scores = cross_val_score(
         model, X_array, y_array, cv=tscv, scoring="r2", n_jobs=-1
     )

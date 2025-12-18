@@ -78,6 +78,10 @@ RESERVE_HPG_NBR_COL = RESERVE_HPG_COL + "_nbrs"
 TOTAL_RESERVES_COL = "total_reserves"
 TOTAL_RESERVES_NBR_COL = TOTAL_RESERVES_COL + "_nbrs"
 VISITORS_NBR_COL = VISITORS_COL + "_nbrs"
+VISITORS_DOW_MEAN_COL = "visitors_dow_mean"
+VISITORS_DOW_MEAN_NBR_COL = VISITORS_DOW_MEAN_COL + "_nbrs"
+RES_VISITORS_DIFF_COL = "res_visitors_diff"
+RES_VISITORS_DIFF_NBR_COL = "nbr_res_visitors_diff"
 
 DAYS_OF_WEEK = ["Mon", "Tue", "Wed", "Th", "Fri", "Sat", "Sun"]
 
