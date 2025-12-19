@@ -61,18 +61,23 @@ def update_features_for_date(
     df = df[
         (df[VISIT_DATE_COL] >= start_date) & (df[VISIT_DATE_COL] <= current_date)
     ].copy()
+    old_df = df.copy()
 
     df = df.sort_values([VISIT_DATE_COL, id_col]).reset_index(drop=True)
     original_cols = set(df.columns)
 
     df = add_basic_stats(df, VISITORS_COL, id_col)
     df = add_neighbors_stats(df, VISITORS_COL, CITY_COL)
-    # df = add_last_month_visitors(df, VISITORS_COL)
 
-    # df = add_lags(df, id_col, VISITORS_COL, lags, False)
-    df = add_lags(df, id_col, VISITORS_COL, (1, 7), False)
-
+    df = add_last_month_visitors(df, VISITORS_COL)
+    df = add_lags(df, id_col, VISITORS_COL, lags, False)
     df = _clean_merge_columns(df, original_cols)
+
+    last_month_col = VISITORS_COL + "_last_month"
+    lag_28 = VISITORS_COL + "_lag_28"
+    df[last_month_col] = df[last_month_col].fillna(old_df[last_month_col])
+    df[lag_28] = df[lag_28].fillna(old_df[lag_28])
+
     df = add_lags(df, CITY_COL, VISITORS_NBR_COL, lags, True)
 
     df = add_reserves_difference(
