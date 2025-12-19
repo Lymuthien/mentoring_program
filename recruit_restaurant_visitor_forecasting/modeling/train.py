@@ -1,26 +1,17 @@
-from typing import Optional
-
 import numpy as np
 import pandas as pd
-from sklearn.feature_selection import (
-    SelectKBest,
-    mutual_info_regression,
-    SelectFromModel,
-)
+from sklearn.feature_selection import SelectFromModel
 from sklearn.linear_model import Ridge, Lasso
 from sklearn.model_selection import TimeSeriesSplit, cross_val_score, GridSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
-import typer
+from typing import Optional
 
 from recruit_restaurant_visitor_forecasting.config import (
     AIR_RESTAURANT_ID_COL,
     VISIT_DATE_COL,
 )
 from recruit_restaurant_visitor_forecasting.dataset import DataDir, read_csv
-
-app = typer.Typer()
 
 
 def load_data() -> tuple:
@@ -29,11 +20,6 @@ def load_data() -> tuple:
 
     if isinstance(labels, pd.DataFrame):
         labels = labels.iloc[:, 0]
-
-    if len(features) != len(labels):
-        raise ValueError(
-            f"Features and labels have different lengths: {len(features)} vs {len(labels)}"
-        )
 
     return features, labels
 

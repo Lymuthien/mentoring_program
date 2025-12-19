@@ -21,7 +21,11 @@ from recruit_restaurant_visitor_forecasting.features import (
     add_last_month_visitors,
     add_reserves_difference,
 )
-from recruit_restaurant_visitor_forecasting.feature_names import lag_col, last_month_col
+from recruit_restaurant_visitor_forecasting.feature_names import (
+    lag_col,
+    last_month_col,
+    nbrs_col,
+)
 
 
 def _clean_merge_columns(df: pd.DataFrame, original_cols: set) -> pd.DataFrame:
@@ -72,10 +76,12 @@ def update_features_for_date(
 
     last_month = last_month_col(VISITORS_COL)
     lag_28 = lag_col(VISITORS_COL, 28)
-    df[last_month] = df[last_month].fillna(old_df[last_month])
-    df[lag_28] = df[lag_28].fillna(old_df[lag_28])
+    nbrs_lag_28 = lag_col(nbrs_col(VISITORS_COL), 28)
 
     df = add_lags(df, CITY_COL, VISITORS_NBR_COL, lags, True)
+    df = _clean_merge_columns(df, original_cols)
+    df[lag_28] = df[lag_28].fillna(old_df[lag_28]).fillna(df[nbrs_lag_28])
+    df[last_month] = df[last_month].fillna(old_df[last_month]).fillna(df[lag_28])
 
     df = add_reserves_difference(
         df, VISITORS_COL, TOTAL_RESERVES_COL, RES_VISITORS_DIFF_COL
@@ -100,7 +106,7 @@ def recursive_predict(
     train_features: pd.DataFrame,
     train_labels: pd.Series,
     drop_cols: list,
-) -> pd.Series:
+) -> tuple[pd.Series, pd.DataFrame]:
     id_col = AIR_RESTAURANT_ID_COL
     idx_cols = [id_col, VISIT_DATE_COL]
     feature_exclude = {id_col, VISIT_DATE_COL, VISITORS_COL, *drop_cols}
@@ -113,7 +119,7 @@ def recursive_predict(
     combined = combined.sort_values([VISIT_DATE_COL, id_col]).reset_index(drop=True)
 
     test_dates = sorted(test_features[VISIT_DATE_COL].unique())
-    predictions = {}
+    result = pd.Series(index=test_features.index, dtype=float)
 
     for date in tqdm(test_dates, desc="Predicting recursively"):
         combined = combined.drop(columns=[VISITORS_NBR_COL])
@@ -123,7 +129,8 @@ def recursive_predict(
         )
 
         missing_cols = updated_features.columns.difference(combined.columns)
-        combined[missing_cols] = np.nan
+        if not missing_cols.empty:
+            combined[missing_cols] = np.nan
 
         combined = combined.set_index(idx_cols)
         updated_features = updated_features.set_index(idx_cols)
@@ -135,58 +142,14 @@ def recursive_predict(
         )
         current_features = combined[date_mask]
         X_current = current_features.drop(columns=feature_exclude)
-
         y_pred = model.predict(X_current.values)
         y_pred = np.maximum(y_pred, 0)
 
         combined.loc[current_features.index, VISITORS_COL] = y_pred
-        temp_df = current_features[[id_col, VISIT_DATE_COL]].copy()
-        temp_df[VISITORS_COL] = y_pred
-        predictions.update(
-            temp_df.set_index([id_col, VISIT_DATE_COL])[VISITORS_COL].to_dict()
-        )
 
-    result = test_features.apply(
-        lambda row: predictions.get((row[id_col], row[VISIT_DATE_COL]), 0), axis=1
-    )
+        test_date_mask = test_features[VISIT_DATE_COL] == date
+        test_date_df = test_features[test_date_mask]
+        test_date_indices = test_date_df.index
+        result.loc[test_date_indices] = y_pred
 
     return result, combined
-
-
-def predict_submission(
-    model: Pipeline,
-    submission_df: pd.DataFrame,
-    train_features: pd.DataFrame,
-    train_labels: pd.Series,
-    drop_cols: list,
-) -> pd.DataFrame:
-    submission_features = submission_df.copy()
-
-    template_features = (
-        train_features.groupby(AIR_RESTAURANT_ID_COL).last().reset_index()
-    )
-
-    submission_features = submission_features.merge(
-        template_features.drop(columns=[VISIT_DATE_COL], errors="ignore"),
-        on=AIR_RESTAURANT_ID_COL,
-        how="left",
-    )
-
-    submission_features[VISIT_DATE_COL] = pd.to_datetime(
-        submission_features[VISIT_DATE_COL]
-    )
-    if VISITORS_COL not in submission_features.columns:
-        submission_features[VISITORS_COL] = 0
-
-    predictions = recursive_predict(
-        model=model,
-        test_features=submission_features,
-        train_features=train_features,
-        train_labels=train_labels,
-        drop_cols=drop_cols,
-    )
-
-    result = submission_df.copy()
-    result[VISITORS_COL] = predictions.values
-
-    return result

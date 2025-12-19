@@ -8,6 +8,8 @@ from recruit_restaurant_visitor_forecasting.config import (
     VISIT_DATE_COL,
     ACTUAL_MEAN,
     PRED_MEAN,
+    VISITORS_COL,
+    AIR_RESTAURANT_ID_COL,
 )
 from recruit_restaurant_visitor_forecasting.features import add_sum_of_reserves
 
@@ -122,3 +124,11 @@ def convert_to_serializable(obj):
         return {k: convert_to_serializable(v) for k, v in obj.items()}
     else:
         return obj
+
+
+def get_format(orig_df, labels):
+    labels = labels.to_frame(VISITORS_COL)
+    labels["id"] = (
+        orig_df[AIR_RESTAURANT_ID_COL] + "_" + orig_df[VISIT_DATE_COL].astype(str)
+    )
+    return labels.reset_index(drop=True)
