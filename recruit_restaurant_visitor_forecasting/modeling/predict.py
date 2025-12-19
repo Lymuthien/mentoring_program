@@ -21,6 +21,7 @@ from recruit_restaurant_visitor_forecasting.features import (
     add_last_month_visitors,
     add_reserves_difference,
 )
+from recruit_restaurant_visitor_forecasting.feature_names import lag_col, last_month_col
 
 
 def _clean_merge_columns(df: pd.DataFrame, original_cols: set) -> pd.DataFrame:
@@ -28,13 +29,9 @@ def _clean_merge_columns(df: pd.DataFrame, original_cols: set) -> pd.DataFrame:
     cols_to_drop = []
     cols_to_rename = {}
 
-    x_y_pairs = {}
-
-    for col in df.columns:
-        if col.endswith("_y"):
-            base_col = col[:-2]
-            x_col = f"{base_col}_x"
-            x_y_pairs[base_col] = (x_col, col)
+    x_y_pairs = {
+        col[:-2]: (f"{col[:-2]}_x", col) for col in df.columns if col.endswith("_y")
+    }
 
     for base_col, (x_col, y_col) in x_y_pairs.items():
         cols_to_drop.append(x_col)
@@ -73,9 +70,9 @@ def update_features_for_date(
     df = add_lags(df, id_col, VISITORS_COL, lags, False)
     df = _clean_merge_columns(df, original_cols)
 
-    last_month_col = VISITORS_COL + "_last_month"
-    lag_28 = VISITORS_COL + "_lag_28"
-    df[last_month_col] = df[last_month_col].fillna(old_df[last_month_col])
+    last_month = last_month_col(VISITORS_COL)
+    lag_28 = lag_col(VISITORS_COL, 28)
+    df[last_month] = df[last_month].fillna(old_df[last_month])
     df[lag_28] = df[lag_28].fillna(old_df[lag_28])
 
     df = add_lags(df, CITY_COL, VISITORS_NBR_COL, lags, True)
@@ -105,65 +102,55 @@ def recursive_predict(
     drop_cols: list,
 ) -> pd.Series:
     id_col = AIR_RESTAURANT_ID_COL
+    idx_cols = [id_col, VISIT_DATE_COL]
+    feature_exclude = {id_col, VISIT_DATE_COL, VISITORS_COL, *drop_cols}
 
-    combined_features = pd.concat(
+    combined = pd.concat(
         [train_features.copy(), test_features.copy()], ignore_index=True
     )
-    combined_features[VISITORS_COL] = 0
-    combined_features.loc[: len(train_features) - 1, VISITORS_COL] = train_labels.values
-    combined_features = combined_features.sort_values(
-        [VISIT_DATE_COL, id_col]
-    ).reset_index(drop=True)
+    combined[VISITORS_COL] = 0
+    combined.loc[: len(train_features) - 1, VISITORS_COL] = train_labels.values
+    combined = combined.sort_values([VISIT_DATE_COL, id_col]).reset_index(drop=True)
 
     test_dates = sorted(test_features[VISIT_DATE_COL].unique())
     predictions = {}
 
     for date in tqdm(test_dates, desc="Predicting recursively"):
-        combined_features = combined_features.drop(columns=[VISITORS_NBR_COL])
+        combined = combined.drop(columns=[VISITORS_NBR_COL])
         updated_features = update_features_for_date(
-            combined_features.copy(),
+            combined,
             date,
         )
 
-        date_mask = combined_features[VISIT_DATE_COL] == date
+        missing_cols = updated_features.columns.difference(combined.columns)
+        combined[missing_cols] = np.nan
 
-        feature_cols = updated_features.columns.difference(
-            [id_col, VISIT_DATE_COL, VISITORS_COL]
+        combined = combined.set_index(idx_cols)
+        updated_features = updated_features.set_index(idx_cols)
+        combined.update(updated_features)
+        combined = combined.reset_index()
+
+        date_mask = (combined[VISIT_DATE_COL] == date) & (
+            combined.index >= len(train_features)
+        )
+        current_features = combined[date_mask]
+        X_current = current_features.drop(columns=feature_exclude)
+
+        y_pred = model.predict(X_current.values)
+        y_pred = np.maximum(y_pred, 0)
+
+        combined.loc[current_features.index, VISITORS_COL] = y_pred
+        temp_df = current_features[[id_col, VISIT_DATE_COL]].copy()
+        temp_df[VISITORS_COL] = y_pred
+        predictions.update(
+            temp_df.set_index([id_col, VISIT_DATE_COL])[VISITORS_COL].to_dict()
         )
 
-        missing_cols = feature_cols.difference(combined_features.columns)
-        combined_features[missing_cols] = np.nan
+    result = test_features.apply(
+        lambda row: predictions.get((row[id_col], row[VISIT_DATE_COL]), 0), axis=1
+    )
 
-        idx_cols = [id_col, VISIT_DATE_COL]
-        combined_features = combined_features.set_index(idx_cols)
-        updated_features = updated_features.set_index(idx_cols)
-        combined_features.update(updated_features[feature_cols])
-        combined_features = combined_features.reset_index()
-
-        test_mask = date_mask & (combined_features.index >= len(train_features))
-        current_features = combined_features[test_mask].copy()
-        X_current = current_features.drop(columns=[*drop_cols, VISITORS_COL])
-
-        print(X_current.isna().sum())
-        try:
-            y_pred = model.predict(X_current.values)
-            y_pred = np.maximum(y_pred, 0)
-        except Exception as e:
-            print(e)
-            return X_current
-
-        for idx, pred in zip(current_features.index, y_pred):
-            store_id = current_features.loc[idx, id_col]
-            predictions[(store_id, date)] = pred
-            combined_features.loc[idx, VISITORS_COL] = pred
-
-    result = pd.Series(index=test_features.index, dtype=float)
-    for idx in test_features.index:
-        store_id = test_features.loc[idx, id_col]
-        date = test_features.loc[idx, VISIT_DATE_COL]
-        result.loc[idx] = predictions.get((store_id, date), 0)
-
-    return result, combined_features
+    return result, combined
 
 
 def predict_submission(

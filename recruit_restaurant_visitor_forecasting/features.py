@@ -24,6 +24,12 @@ from recruit_restaurant_visitor_forecasting.config import (
     YEAR_COL,
     YEAR_MONTH_COL,
 )
+from recruit_restaurant_visitor_forecasting.feature_names import (
+    weekday_opened,
+    nbrs_col,
+    last_month_col,
+    lag_col,
+)
 
 SCALE_COL = "scale"
 AVG_SCALE_COL = "avg_scale"
@@ -83,7 +89,8 @@ def get_open_status(pct_df: pd.DataFrame, threshold_ratio: float = 0.5):
     threshold = threshold_ratio * max_pct
 
     open_cols = {
-        f"{day}_open": (pct_df[day] >= threshold).astype(int) for day in DAYS_OF_WEEK
+        weekday_opened(day): (pct_df[day] >= threshold).astype(int)
+        for day in DAYS_OF_WEEK
     }
     pct_df = pct_df.assign(**open_cols)
     pct_df = pct_df.drop(DAYS_OF_WEEK, axis=1)
@@ -96,13 +103,12 @@ def add_open_usually(df: pd.DataFrame, drop_days: bool = True):
 
     def get_open(row):
         day = row[DAY_OF_WEEK_COL]
-        col_name = f"{day}_open"
-        return row[col_name]
+        return row[weekday_opened(day)]
 
     df[OPEN_USUALLY_COL] = df.apply(get_open, axis=1)
 
     if drop_days:
-        open_flags = [day + "_open" for day in DAYS_OF_WEEK]
+        open_flags = [weekday_opened(day) for day in DAYS_OF_WEEK]
         df = df.drop(open_flags, axis=1)
     return df
 
@@ -187,15 +193,16 @@ def add_days_since_last_record(
     df: pd.DataFrame, id_col: str, date_col: str, history_df: pd.DataFrame = None
 ) -> pd.DataFrame:
     df = df.copy()
+    IS_CURRENT_DF = "_is_current"
 
     if history_df is not None:
         history_df = history_df.copy()
-        df["_is_current"] = True
-        history_df["_is_current"] = False
+        df[IS_CURRENT_DF] = True
+        history_df[IS_CURRENT_DF] = False
         combined = pd.concat([history_df, df])
     else:
         combined = df
-        combined["_is_current"] = True
+        combined[IS_CURRENT_DF] = True
 
     combined.sort_values([id_col, date_col], inplace=True)
 
@@ -211,7 +218,7 @@ def add_days_since_last_record(
 
     combined[DAYS_FROM_LAST_VISIT_COL] = base + position
 
-    result = combined[combined["_is_current"]].drop("_is_current", axis=1)
+    result = combined[combined[IS_CURRENT_DF]].drop(IS_CURRENT_DF, axis=1)
 
     return result.reset_index(drop=True)
 
@@ -449,7 +456,7 @@ def add_neighbors_stats(
     orig_df = df
     df = df.copy()[[VISIT_DATE_COL, grouping_col, target_col, OPEN_USUALLY_COL]]
     if rename_col:
-        nbr_target = target_col + "_nbrs"
+        nbr_target = nbrs_col(target_col)
         df.rename(columns={target_col: nbr_target}, inplace=True)
     else:
         nbr_target = target_col
@@ -471,7 +478,7 @@ def add_last_month_visitors(
     target_col,
     reference_df: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    feature_col = target_col + "_last_month"
+    feature_col = last_month_col(target_col)
 
     df = df.copy()
     ref_df = df if reference_df is None else reference_df
@@ -508,11 +515,10 @@ def add_historical_dow_mean(
     )
 
     last_values = df.loc[
-        df.groupby(grouping_keys)[VISIT_DATE_COL].idxmax(), [*grouping_keys, feature_name]
+        df.groupby(grouping_keys)[VISIT_DATE_COL].idxmax(),
+        [*grouping_keys, feature_name],
     ].reset_index(drop=True)
-    test_df = test_df.merge(
-        last_values, on=grouping_keys, how="left"
-    )
+    test_df = test_df.merge(last_values, on=grouping_keys, how="left")
 
     return df.sort_index(), test_df
 
@@ -541,14 +547,14 @@ def add_lags(
         df_gr = df.groupby([id_col, VISIT_DATE_COL])[target_col].mean().to_frame()
         grouped = df_gr.groupby(level=0)[target_col]
 
-        new_cols = {f"{target_col}_lag_{lag}": grouped.shift(lag) for lag in lags}
+        new_cols = {lag_col(target_col, lag): grouped.shift(lag) for lag in lags}
         df_gr = df_gr.assign(**new_cols)
         df_gr = df_gr.reset_index().drop(target_col, axis=1)
         df = df.merge(df_gr, on=[id_col, VISIT_DATE_COL], how="left")
     else:
         grouped = df.groupby(id_col)[target_col]
 
-        new_cols = {f"{target_col}_lag_{lag}": grouped.shift(lag) for lag in lags}
+        new_cols = {lag_col(target_col, lag): grouped.shift(lag) for lag in lags}
         df = df.assign(**new_cols)
 
     return df
