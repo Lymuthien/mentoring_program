@@ -56,7 +56,7 @@ def create_model_gridsearch(
             }
         ]
 
-    tscv = TimeSeriesSplit(n_splits=n_splits)
+    tscv = TimeSeriesSplit(n_splits=n_splits, test_size=4145)
     grid_search = GridSearchCV(
         estimator=pipeline,
         param_grid=param_grid,
