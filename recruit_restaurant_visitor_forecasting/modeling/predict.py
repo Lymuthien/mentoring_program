@@ -142,7 +142,7 @@ def recursive_predict(
         )
         current_features = combined[date_mask]
         X_current = current_features.drop(columns=feature_exclude)
-        y_pred = model.predict(X_current.values)
+        y_pred = model.predict(X_current)
         y_pred = np.maximum(y_pred, 0)
 
         combined.loc[current_features.index, VISITORS_COL] = y_pred

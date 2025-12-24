@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from sklearn.base import TransformerMixin, BaseEstimator
 from sklearn.feature_selection import SelectFromModel
 from sklearn.linear_model import Ridge, Lasso
 from sklearn.model_selection import TimeSeriesSplit, cross_val_score, GridSearchCV
@@ -32,15 +33,74 @@ def prepare_features(features: pd.DataFrame) -> pd.DataFrame:
     return features
 
 
+class ExpandingWindowSplit:
+    def __init__(self, test_size, date_col, n_splits=5, max_train_size=60):
+        self.n_splits = n_splits
+        self.max_train_size = max_train_size
+        self.test_size = test_size
+        self.date_col = date_col
+
+    def split(self, X, y=None, groups=None):
+        dates = pd.Series(X[self.date_col].unique()).sort_values().reset_index(drop=True)
+        n_dates = len(dates)
+        n_splits = self.n_splits
+        test_size = self.test_size
+
+        if n_dates - n_splits * test_size <= 0:
+            raise ValueError(
+                f"Too many splits={n_splits} for number of dates"
+                f"={n_dates} with test_size={test_size}."
+            )
+
+        indices = pd.Series(np.arange(len(X)), index=X.index)
+        date_to_indices = {}
+        for date, group_indices in X.groupby(self.date_col).groups.items():
+            date_to_indices[date] = indices.loc[group_indices].values
+        test_starts = range(n_dates - n_splits * test_size, n_dates, test_size)
+
+        for test_start in test_starts:
+            test_end = test_start + test_size
+            test_dates = dates.iloc[test_start:test_end]
+
+            train_end = test_start
+            if self.max_train_size and self.max_train_size < train_end:
+                train_start = train_end - self.max_train_size
+            else:
+                train_start = 0
+            train_dates = dates.iloc[train_start:train_end]
+            
+            train_indices = np.concatenate([date_to_indices[date] for date in train_dates])
+            test_indices = np.concatenate([date_to_indices[date] for date in test_dates])
+            
+            yield train_indices, test_indices
+
+    def get_n_splits(self, X=None, y=None, groups=None):
+        return self.n_splits
+
+
+class FeatureDropper(TransformerMixin, BaseEstimator):
+    def __init__(self, features: list[str] = None):
+        self.features = features
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        X = X.drop(columns=[f for f in self.features if f in X.columns])
+        return X
+
+
 def create_model_gridsearch(
     param_grid: Optional[dict[str, list]] = None,
-    n_splits: int = 3,
+    n_splits: int = 5,
     scoring: str = "neg_root_mean_squared_error",
     n_jobs: int = -1,
     verbose: int = 1,
+    drop_features: list[str] = None,
 ) -> GridSearchCV:
     pipeline = Pipeline(
         [
+            ("feature_dropper", FeatureDropper(drop_features)),
             ("scaler", StandardScaler()),
             ("selector", SelectFromModel(Lasso(max_iter=5000, random_state=42))),
             ("ridge", Ridge()),
@@ -50,13 +110,14 @@ def create_model_gridsearch(
     if param_grid is None:
         param_grid = [
             {
-                "selector__estimator__alpha": [1e-3, 1e-2, 1e-1],
-                "selector__threshold": ["median", "mean", 1e-4],
-                "ridge__alpha": np.logspace(-3, 3, 7),
+                "selector__estimator__alpha": np.logspace(-3, 3, 7),
+                "selector__threshold": ["median", "mean", 1e-1, 1e-2, 1e-3, 1e-4],
+                "ridge__alpha": np.logspace(-2, 5, 8),
             }
         ]
 
-    tscv = TimeSeriesSplit(n_splits=n_splits, test_size=4145)
+    tscv = ExpandingWindowSplit(n_splits=n_splits, max_train_size=175, test_size=39, date_col=VISIT_DATE_COL)
+    # tscv = TimeSeriesSplit(n_splits=n_splits, test_size=4145)
     grid_search = GridSearchCV(
         estimator=pipeline,
         param_grid=param_grid,
