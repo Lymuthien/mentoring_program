@@ -110,14 +110,13 @@ def create_model_gridsearch(
     if param_grid is None:
         param_grid = [
             {
-                "selector__estimator__alpha": np.logspace(-3, 3, 7),
+                "selector__estimator__alpha": np.logspace(-3, 1, 5),
                 "selector__threshold": ["median", "mean", 1e-1, 1e-2, 1e-3, 1e-4],
                 "ridge__alpha": np.logspace(-2, 5, 8),
             }
         ]
 
     tscv = ExpandingWindowSplit(n_splits=n_splits, max_train_size=175, test_size=39, date_col=VISIT_DATE_COL)
-    # tscv = TimeSeriesSplit(n_splits=n_splits, test_size=4145)
     grid_search = GridSearchCV(
         estimator=pipeline,
         param_grid=param_grid,
