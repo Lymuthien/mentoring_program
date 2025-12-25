@@ -33,6 +33,32 @@ def prepare_features(features: pd.DataFrame) -> pd.DataFrame:
     return features
 
 
+def train_test_split_by_date(
+    X: pd.DataFrame,
+    y: pd.Series,
+    date_col: str,
+    test_size: float = 0.2,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+    unique_dates = X[date_col].drop_duplicates().sort_values().reset_index(drop=True)
+    n_dates = len(unique_dates)
+    
+    n_test_dates = int(np.ceil(n_dates * test_size))
+    n_train_dates = n_dates - n_test_dates
+    
+    train_dates = set(unique_dates.iloc[:n_train_dates])
+    test_dates = set(unique_dates.iloc[n_train_dates:])
+    
+    train_mask = X[date_col].isin(train_dates)
+    test_mask = X[date_col].isin(test_dates)
+    
+    X_train = X.loc[train_mask].reset_index(drop=True)
+    X_test = X.loc[test_mask].reset_index(drop=True)
+    y_train = y.loc[train_mask].reset_index(drop=True)
+    y_test = y.loc[test_mask].reset_index(drop=True)
+    
+    return X_train, X_test, y_train, y_test
+
+
 class ExpandingWindowSplit:
     def __init__(self, test_size, date_col, n_splits=5, max_train_size=60):
         self.n_splits = n_splits
