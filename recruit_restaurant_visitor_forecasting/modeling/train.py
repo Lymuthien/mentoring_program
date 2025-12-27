@@ -131,7 +131,7 @@ def create_model_gridsearch(
         [
             ("feature_dropper", FeatureDropper(drop_features)),
             ("scaler", StandardScaler()),
-            ("selector", SelectFromModel(Lasso(max_iter=5000, random_state=42))),
+            ("selector", SelectFromModel(Lasso(random_state=42))),
             ("ridge", Ridge()),
         ]
     )
@@ -139,6 +139,7 @@ def create_model_gridsearch(
     if param_grid is None:
         param_grid = [
             {
+                "selector__estimator__max_iter": [500, 1000, 2000],
                 "selector__estimator__alpha": np.logspace(-3, 1, 5),
                 "selector__threshold": ["median", "mean", 1e-1, 1e-2, 1e-3, 1e-4],
                 "ridge__alpha": np.logspace(-2, 5, 8),
