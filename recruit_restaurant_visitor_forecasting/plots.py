@@ -261,27 +261,18 @@ def plot_acf(acf_df: pd.DataFrame, col: str, df_str: str) -> None:
 @show_figure(figsize=(12, 10))
 def plot_features_target_corr(
     features: pd.DataFrame, target: pd.Series
-) -> pd.DataFrame:
-    data = features.copy()
-    data = data.reset_index(drop=True)
-    target_aligned = target.reset_index(drop=True)
-    data["target"] = target_aligned
+) -> pd.Series:
+    features = features.select_dtypes(include=[np.number])
+    corr = features.corrwith(target).sort_values(key=lambda s: s.abs(), ascending=False)
 
-    corr_series = (
-        data.select_dtypes(include=[np.number])
-        .corr()["target"]
-        .drop("target")
-        .sort_values(key=lambda s: s.abs(), ascending=False)
-    )
-
-    corr_series.plot(
+    corr.plot(
         kind="bar", title="Correlation of predictors and target", alpha=0.8
     )
     plt.ylabel("Correlation with target")
     plt.grid(axis="y", alpha=0.3)
     plt.tight_layout()
 
-    return corr_series
+    return corr
 
 
 def plot_daily_pred(daily: pd.DataFrame, axs, train: bool = True):

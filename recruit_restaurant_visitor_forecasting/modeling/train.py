@@ -106,12 +106,15 @@ class ExpandingWindowSplit:
 
 class FeatureDropper(TransformerMixin, BaseEstimator):
     def __init__(self, features: list[str] = None):
-        self.features = features
+        self.features = features or []
 
     def fit(self, X, y=None):
         return self
 
     def transform(self, X):
+        if not self.features:
+            return X
+
         X = X.drop(columns=[f for f in self.features if f in X.columns])
         return X
 
