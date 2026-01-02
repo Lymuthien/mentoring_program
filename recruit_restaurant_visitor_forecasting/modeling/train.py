@@ -3,10 +3,12 @@ import pandas as pd
 from sklearn.base import TransformerMixin, BaseEstimator
 from sklearn.feature_selection import SelectFromModel
 from sklearn.linear_model import Ridge, Lasso
+from lightgbm import LGBMRegressor
+from sklearn.metrics import mean_squared_log_error, make_scorer
 from sklearn.model_selection import TimeSeriesSplit, cross_val_score, GridSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
-from typing import Optional
+from typing import Optional, Union
 
 from recruit_restaurant_visitor_forecasting.config import (
     AIR_RESTAURANT_ID_COL,
@@ -119,6 +121,57 @@ class FeatureDropper(TransformerMixin, BaseEstimator):
         return X
 
 
+def _rmsle(y_true, y_pred) -> float:
+    y_pred = np.maximum(y_pred, 0)
+    return mean_squared_log_error(y_true, y_pred) ** 0.5
+
+
+RMSLE_SCORER = make_scorer(_rmsle, greater_is_better=False)
+
+
+def light_gbm_gridsearch(
+    param_grid: Optional[dict[str, list]] = None,
+    n_splits: int = 5,
+    scoring: Union[str,callable] = RMSLE_SCORER,
+    n_jobs: int = -1,
+    verbose: int = 1,
+    drop_features: list[str] = None,
+) -> GridSearchCV:
+    pipeline = Pipeline(
+        [
+            ("feature_dropper", FeatureDropper(drop_features)),
+            ("model", LGBMRegressor(random_state=42)),
+        ]
+    )
+
+    if param_grid is None:
+        param_grid = [
+            {
+                "model__num_leaves": [31, 63],
+                "model__max_depth": [3, 5, 7],
+                "model__learning_rate": [0.01, 0.1],
+                "model__n_estimators": [100, 200],
+                "model__min_child_samples": [10, 20, 40],
+                "model__reg_alpha": [0.0, 0.1, 1.0],
+                "model__reg_lambda": [0.0, 0.1, 1.0],
+            }
+        ]
+
+    tscv = ExpandingWindowSplit(n_splits=n_splits, max_train_size=90, test_size=1, date_col=VISIT_DATE_COL)
+    grid_search = GridSearchCV(
+        estimator=pipeline,
+        param_grid=param_grid,
+        cv=tscv,
+        scoring=scoring,
+        n_jobs=n_jobs,
+        verbose=verbose,
+        refit=True,
+        return_train_score=False,
+    )
+
+    return grid_search
+
+
 def create_model_gridsearch(
     param_grid: Optional[dict[str, list]] = None,
     n_splits: int = 5,
@@ -146,7 +199,7 @@ def create_model_gridsearch(
             }
         ]
 
-    tscv = ExpandingWindowSplit(n_splits=n_splits, max_train_size=175, test_size=39, date_col=VISIT_DATE_COL)
+    tscv = ExpandingWindowSplit(n_splits=n_splits, max_train_size=90, test_size=1, date_col=VISIT_DATE_COL)
     grid_search = GridSearchCV(
         estimator=pipeline,
         param_grid=param_grid,

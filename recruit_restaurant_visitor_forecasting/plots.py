@@ -259,20 +259,30 @@ def plot_acf(acf_df: pd.DataFrame, col: str, df_str: str) -> None:
 
 
 @show_figure(figsize=(12, 10))
-def plot_features_target_corr(
-    features: pd.DataFrame, target: pd.Series
-) -> pd.Series:
+def plot_features_target_corr(features: pd.DataFrame, target: pd.Series):
     features = features.select_dtypes(include=[np.number])
     corr = features.corrwith(target).sort_values(key=lambda s: s.abs(), ascending=False)
 
-    corr.plot(
-        kind="bar", title="Correlation of predictors and target", alpha=0.8
-    )
+    corr.plot(kind="bar", title="Correlation of predictors and target", alpha=0.8)
     plt.ylabel("Correlation with target")
     plt.grid(axis="y", alpha=0.3)
     plt.tight_layout()
 
-    return corr
+
+@show_figure(figsize=(12, 10))
+def plot_feature_importances(model, columns):
+    feature_importances = pd.DataFrame(
+        {
+            "feature": columns,
+            "importance": model.named_steps["model"].feature_importances_,
+        }
+    ).sort_values("importance", ascending=False)
+    feature_importances = feature_importances.set_index("feature")
+
+    feature_importances.plot(kind="bar", title="Importance of features", alpha=0.8)
+    plt.ylabel("Importance")
+    plt.grid(axis="y", alpha=0.3)
+    plt.tight_layout()
 
 
 def plot_daily_pred(daily: pd.DataFrame, axs, train: bool = True):
