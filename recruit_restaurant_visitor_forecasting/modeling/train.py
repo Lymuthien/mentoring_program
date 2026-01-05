@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from sklearn.base import TransformerMixin, BaseEstimator
 from sklearn.feature_selection import SelectFromModel
+from sklearn.inspection import permutation_importance
 from sklearn.linear_model import Ridge, Lasso
 from lightgbm import LGBMRegressor
 from sklearn.metrics import mean_squared_log_error, make_scorer
@@ -43,21 +44,21 @@ def train_test_split_by_date(
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
     unique_dates = X[date_col].drop_duplicates().sort_values().reset_index(drop=True)
     n_dates = len(unique_dates)
-    
+
     n_test_dates = int(np.ceil(n_dates * test_size))
     n_train_dates = n_dates - n_test_dates
-    
+
     train_dates = set(unique_dates.iloc[:n_train_dates])
     test_dates = set(unique_dates.iloc[n_train_dates:])
-    
+
     train_mask = X[date_col].isin(train_dates)
     test_mask = X[date_col].isin(test_dates)
-    
+
     X_train = X.loc[train_mask].reset_index(drop=True)
     X_test = X.loc[test_mask].reset_index(drop=True)
     y_train = y.loc[train_mask].reset_index(drop=True)
     y_test = y.loc[test_mask].reset_index(drop=True)
-    
+
     return X_train, X_test, y_train, y_test
 
 
@@ -69,7 +70,9 @@ class ExpandingWindowSplit:
         self.date_col = date_col
 
     def split(self, X, y=None, groups=None):
-        dates = pd.Series(X[self.date_col].unique()).sort_values().reset_index(drop=True)
+        dates = (
+            pd.Series(X[self.date_col].unique()).sort_values().reset_index(drop=True)
+        )
         n_dates = len(dates)
         n_splits = self.n_splits
         test_size = self.test_size
@@ -96,10 +99,14 @@ class ExpandingWindowSplit:
             else:
                 train_start = 0
             train_dates = dates.iloc[train_start:train_end]
-            
-            train_indices = np.concatenate([date_to_indices[date] for date in train_dates])
-            test_indices = np.concatenate([date_to_indices[date] for date in test_dates])
-            
+
+            train_indices = np.concatenate(
+                [date_to_indices[date] for date in train_dates]
+            )
+            test_indices = np.concatenate(
+                [date_to_indices[date] for date in test_dates]
+            )
+
             yield train_indices, test_indices
 
     def get_n_splits(self, X=None, y=None, groups=None):
@@ -129,10 +136,75 @@ def _rmsle(y_true, y_pred) -> float:
 RMSLE_SCORER = make_scorer(_rmsle, greater_is_better=False)
 
 
+def select_features_with_permutation_importance(
+    X: pd.DataFrame,
+    y: pd.Series,
+    drop_features: list[str] = None,
+    test_size: float = 0.2,
+    scoring: Union[str, callable] = RMSLE_SCORER,
+    n_repeats: int = 5,
+    top_k: int = 30,
+    random_state: int = 42,
+    base_model_params: dict = None,
+) -> tuple[list[str], pd.DataFrame]:
+    drop_features = set(drop_features or [])
+
+    X_train, X_test, y_train, y_test = train_test_split_by_date(
+        X, y, date_col=VISIT_DATE_COL, test_size=test_size
+    )
+    X_train = X_train.drop(columns=drop_features)
+    X_test = X_test.drop(columns=drop_features)
+    candidate_features = X_train.columns.tolist()
+
+    base_params = {
+        "random_state": random_state,
+        "n_estimators": 150,
+        "num_leaves": 31,
+    }
+    if base_model_params:
+        base_params.update(base_model_params)
+
+    model = LGBMRegressor(**base_params)
+    model.fit(X_train, y_train)
+
+    perm_result = permutation_importance(
+        model,
+        X_test,
+        y_test,
+        scoring=scoring,
+        n_repeats=n_repeats,
+        n_jobs=-1,
+        random_state=random_state,
+    )
+
+    importance_df = (
+        pd.DataFrame(
+            {
+                "feature": candidate_features,
+                "importance_mean": perm_result.importances_mean,
+                "importance_std": perm_result.importances_std,
+            }
+        )
+        .sort_values("importance_mean", ascending=False)
+        .reset_index(drop=True)
+    )
+    selected_features = importance_df.head(top_k)["feature"].tolist()
+
+    return selected_features, importance_df
+
+
+def build_feature_drop_list(
+    all_columns: list[str],
+    selected_features: list[str],
+) -> list[str]:
+    drop_set = set(all_columns) - set(selected_features)
+    return list(drop_set)
+
+
 def light_gbm_gridsearch(
     param_grid: Optional[dict[str, list]] = None,
     n_splits: int = 5,
-    scoring: Union[str,callable] = RMSLE_SCORER,
+    scoring: Union[str, callable] = RMSLE_SCORER,
     n_jobs: int = -1,
     verbose: int = 1,
     drop_features: list[str] = None,
@@ -147,17 +219,19 @@ def light_gbm_gridsearch(
     if param_grid is None:
         param_grid = [
             {
-                "model__num_leaves": [31, 63],
-                "model__max_depth": [3, 5, 7],
-                "model__learning_rate": [0.01, 0.1],
-                "model__n_estimators": [100, 200],
-                "model__min_child_samples": [10, 20, 40],
+                "model__num_leaves": [15, 31],
+                "model__max_depth": [3, 4, 5],
+                "model__learning_rate": [0.1, 0.05, 0.01],
+                "model__n_estimators": [100, 150, 200],
+                "model__min_child_samples": [10, 20, 30],
                 "model__reg_alpha": [0.0, 0.1, 1.0],
                 "model__reg_lambda": [0.0, 0.1, 1.0],
             }
         ]
 
-    tscv = ExpandingWindowSplit(n_splits=n_splits, max_train_size=90, test_size=1, date_col=VISIT_DATE_COL)
+    tscv = ExpandingWindowSplit(
+        n_splits=n_splits, max_train_size=90, test_size=1, date_col=VISIT_DATE_COL
+    )
     grid_search = GridSearchCV(
         estimator=pipeline,
         param_grid=param_grid,
@@ -199,7 +273,9 @@ def create_model_gridsearch(
             }
         ]
 
-    tscv = ExpandingWindowSplit(n_splits=n_splits, max_train_size=90, test_size=1, date_col=VISIT_DATE_COL)
+    tscv = ExpandingWindowSplit(
+        n_splits=n_splits, max_train_size=90, test_size=1, date_col=VISIT_DATE_COL
+    )
     grid_search = GridSearchCV(
         estimator=pipeline,
         param_grid=param_grid,
