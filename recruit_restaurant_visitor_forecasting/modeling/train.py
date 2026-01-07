@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
+import shap
 from sklearn.base import TransformerMixin, BaseEstimator
 from sklearn.feature_selection import SelectFromModel
-from sklearn.inspection import permutation_importance
 from sklearn.linear_model import Ridge, Lasso
 from lightgbm import LGBMRegressor
 from sklearn.metrics import mean_squared_log_error, make_scorer
@@ -128,24 +128,21 @@ class FeatureDropper(TransformerMixin, BaseEstimator):
         return X
 
 
-def _rmsle(y_true, y_pred) -> float:
+def rmsle(y_true, y_pred) -> float:
     y_pred = np.maximum(y_pred, 0)
     return mean_squared_log_error(y_true, y_pred) ** 0.5
 
 
-RMSLE_SCORER = make_scorer(_rmsle, greater_is_better=False)
+RMSLE_SCORER = make_scorer(rmsle, greater_is_better=False)
 
 
-def select_features_with_permutation_importance(
+def shap_fs(
     X: pd.DataFrame,
     y: pd.Series,
+    model,
     drop_features: list[str] = None,
     test_size: float = 0.2,
-    scoring: Union[str, callable] = RMSLE_SCORER,
-    n_repeats: int = 5,
-    top_k: int = 30,
-    random_state: int = 42,
-    base_model_params: dict = None,
+    top_k: int = 35,
 ) -> tuple[list[str], pd.DataFrame]:
     drop_features = set(drop_features or [])
 
@@ -154,43 +151,29 @@ def select_features_with_permutation_importance(
     )
     X_train = X_train.drop(columns=drop_features)
     X_test = X_test.drop(columns=drop_features)
-    candidate_features = X_train.columns.tolist()
 
-    base_params = {
-        "random_state": random_state,
-        "n_estimators": 150,
-        "num_leaves": 31,
-    }
-    if base_model_params:
-        base_params.update(base_model_params)
-
-    model = LGBMRegressor(**base_params)
     model.fit(X_train, y_train)
+    explainer = shap.TreeExplainer(model)
+    shap_values = explainer.shap_values(X_test)
 
-    perm_result = permutation_importance(
-        model,
-        X_test,
-        y_test,
-        scoring=scoring,
-        n_repeats=n_repeats,
-        n_jobs=-1,
-        random_state=random_state,
-    )
+    shap_abs_mean = np.abs(shap_values).mean(axis=0)
+    shap_abs_std = np.abs(shap_values).std(axis=0)
 
-    importance_df = (
+    imp_df = (
         pd.DataFrame(
             {
-                "feature": candidate_features,
-                "importance_mean": perm_result.importances_mean,
-                "importance_std": perm_result.importances_std,
+                "feature": X_train.columns,
+                "shap_mean_abs": shap_abs_mean,
+                "shap_std_abs": shap_abs_std,
             }
         )
-        .sort_values("importance_mean", ascending=False)
+        .sort_values(["shap_mean_abs"], ascending=False)
         .reset_index(drop=True)
     )
-    selected_features = importance_df.head(top_k)["feature"].tolist()
 
-    return selected_features, importance_df
+    selected_features = imp_df.head(top_k)["feature"].tolist()
+
+    return selected_features, imp_df
 
 
 def build_feature_drop_list(
