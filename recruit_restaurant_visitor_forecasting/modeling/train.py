@@ -5,7 +5,7 @@ from sklearn.base import TransformerMixin, BaseEstimator
 from sklearn.feature_selection import SelectFromModel
 from sklearn.linear_model import Ridge, Lasso
 from lightgbm import LGBMRegressor
-from sklearn.metrics import mean_squared_log_error, make_scorer
+from boruta import BorutaPy
 from sklearn.model_selection import TimeSeriesSplit, cross_val_score, GridSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -132,12 +132,16 @@ def shap_fs(
     X: pd.DataFrame,
     y: pd.Series,
     model,
+    drop_features: list[str] = None,
     test_size: float = 0.2,
     top_k: int = 35,
 ) -> tuple[list[str], pd.DataFrame]:
+    drop_features = set(drop_features or [])
     X_train, X_test, y_train, y_test = train_test_split_by_date(
         X, y, date_col=VISIT_DATE_COL, test_size=test_size
     )
+    X_train = X_train.drop(columns=drop_features, errors="ignore")
+    X_test = X_test.drop(columns=drop_features, errors="ignore")
 
     model.fit(X_train, y_train)
     explainer = shap.TreeExplainer(model)
@@ -161,6 +165,40 @@ def shap_fs(
     selected_features = imp_df.head(top_k)["feature"].tolist()
 
     return selected_features, imp_df
+
+
+def boruta_fs(
+    X: pd.DataFrame,
+    y: pd.Series,
+    model,
+    boruta_params: dict = None,
+) -> tuple[list[str], pd.DataFrame]:
+    if boruta_params is None:
+        boruta_params = {
+            "n_estimators": "auto",
+            "verbose": 1,
+            "random_state": 42,
+            "max_iter": 100,
+        }
+
+    boruta = BorutaPy(model, **boruta_params)
+    boruta.fit(X.values, y.values)
+
+    selected_mask = boruta.support_ | boruta.support_weak_
+    selected_features = X.columns[selected_mask].tolist()
+
+    status_dict = pd.DataFrame(
+        [
+            {
+                "feature": feature,
+                "status": "confirmed" if boruta.support_[i] else "tentative",
+            }
+            for i, feature in enumerate(X.columns)
+            if selected_mask[i]
+        ]
+    )
+
+    return selected_features, status_dict
 
 
 def build_feature_drop_list(
