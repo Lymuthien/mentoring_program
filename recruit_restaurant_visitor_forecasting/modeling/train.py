@@ -6,6 +6,7 @@ from sklearn.feature_selection import SelectFromModel
 from sklearn.linear_model import Ridge, Lasso
 from lightgbm import LGBMRegressor
 from boruta import BorutaPy
+from sklearn.metrics import mean_squared_log_error, make_scorer
 from sklearn.model_selection import TimeSeriesSplit, cross_val_score, GridSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -171,16 +172,8 @@ def boruta_fs(
     X: pd.DataFrame,
     y: pd.Series,
     model,
-    boruta_params: dict = None,
+    boruta_params: dict,
 ) -> tuple[list[str], pd.DataFrame]:
-    if boruta_params is None:
-        boruta_params = {
-            "n_estimators": "auto",
-            "verbose": 1,
-            "random_state": 42,
-            "max_iter": 100,
-        }
-
     boruta = BorutaPy(model, **boruta_params)
     boruta.fit(X.values, y.values)
 
@@ -208,11 +201,17 @@ def build_feature_drop_list(
     drop_set = set(all_columns) - set(selected_features)
     return list(drop_set)
 
+def rmsle(y_true, y_pred) -> float:
+    y_pred = np.maximum(y_pred, 0)
+    return np.sqrt(mean_squared_log_error(y_true, y_pred))
+
+RMSLE_SCORER = make_scorer(rmsle, greater_is_better=False)
+
 
 def lgbm_gridsearch(
     param_grid: dict[str, list],
     n_splits: int = 5,
-    scoring: Union[str, callable] = "neg_root_mean_squared_log_error",
+    scoring: Union[str, callable] = RMSLE_SCORER,
     n_jobs: int = -1,
     verbose: int = 1,
     drop_features: list[str] = None,
@@ -220,12 +219,12 @@ def lgbm_gridsearch(
     pipeline = Pipeline(
         [
             ("feature_dropper", FeatureDropper(drop_features)),
-            ("model", LGBMRegressor(random_state=42)),
+            ("model", LGBMRegressor(random_state=42, verbose=-1)),
         ]
     )
 
     tscv = ExpandingWindowSplit(
-        n_splits=n_splits, max_train_size=90, test_size=1, date_col=VISIT_DATE_COL
+        n_splits=n_splits, test_size=1, date_col=VISIT_DATE_COL
     )
     grid_search = GridSearchCV(
         estimator=pipeline,
