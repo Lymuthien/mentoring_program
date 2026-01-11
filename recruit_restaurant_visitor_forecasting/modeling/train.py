@@ -63,7 +63,7 @@ def train_test_split_by_date(
 
 
 class ExpandingWindowSplit:
-    def __init__(self, test_size, date_col, n_splits=5, max_train_size=60):
+    def __init__(self, test_size, date_col, n_splits=5, max_train_size=None):
         self.n_splits = n_splits
         self.max_train_size = max_train_size
         self.test_size = test_size
@@ -128,29 +128,16 @@ class FeatureDropper(TransformerMixin, BaseEstimator):
         return X
 
 
-def rmsle(y_true, y_pred) -> float:
-    y_pred = np.maximum(y_pred, 0)
-    return mean_squared_log_error(y_true, y_pred) ** 0.5
-
-
-RMSLE_SCORER = make_scorer(rmsle, greater_is_better=False)
-
-
 def shap_fs(
     X: pd.DataFrame,
     y: pd.Series,
     model,
-    drop_features: list[str] = None,
     test_size: float = 0.2,
     top_k: int = 35,
 ) -> tuple[list[str], pd.DataFrame]:
-    drop_features = set(drop_features or [])
-
     X_train, X_test, y_train, y_test = train_test_split_by_date(
         X, y, date_col=VISIT_DATE_COL, test_size=test_size
     )
-    X_train = X_train.drop(columns=drop_features)
-    X_test = X_test.drop(columns=drop_features)
 
     model.fit(X_train, y_train)
     explainer = shap.TreeExplainer(model)
@@ -184,10 +171,10 @@ def build_feature_drop_list(
     return list(drop_set)
 
 
-def light_gbm_gridsearch(
-    param_grid: Optional[dict[str, list]] = None,
+def lgbm_gridsearch(
+    param_grid: dict[str, list],
     n_splits: int = 5,
-    scoring: Union[str, callable] = RMSLE_SCORER,
+    scoring: Union[str, callable] = "neg_root_mean_squared_log_error",
     n_jobs: int = -1,
     verbose: int = 1,
     drop_features: list[str] = None,
@@ -198,19 +185,6 @@ def light_gbm_gridsearch(
             ("model", LGBMRegressor(random_state=42)),
         ]
     )
-
-    if param_grid is None:
-        param_grid = [
-            {
-                "model__num_leaves": [15, 31],
-                "model__max_depth": [3, 4, 5],
-                "model__learning_rate": [0.1, 0.05, 0.01],
-                "model__n_estimators": [100, 150, 200],
-                "model__min_child_samples": [10, 20, 30],
-                "model__reg_alpha": [0.0, 0.1, 1.0],
-                "model__reg_lambda": [0.0, 0.1, 1.0],
-            }
-        ]
 
     tscv = ExpandingWindowSplit(
         n_splits=n_splits, max_train_size=90, test_size=1, date_col=VISIT_DATE_COL
@@ -232,7 +206,7 @@ def light_gbm_gridsearch(
 def create_model_gridsearch(
     param_grid: Optional[dict[str, list]] = None,
     n_splits: int = 5,
-    scoring: str = "neg_root_mean_squared_error",
+    scoring: str = "neg_root_mean_squared_log_error",
     n_jobs: int = -1,
     verbose: int = 1,
     drop_features: list[str] = None,
