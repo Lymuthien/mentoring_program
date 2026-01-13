@@ -32,7 +32,8 @@ try:
 except ModuleNotFoundError:
     pass
 
-np.random.seed(42)
+RANDOM_SEED = 42
+np.random.seed(RANDOM_SEED)
 
 # Column names
 

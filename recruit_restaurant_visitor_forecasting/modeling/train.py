@@ -269,7 +269,7 @@ def lgbm_optuna_search(
             scoring=scoring,
             n_jobs=1,
         )
-        trial.set_user_attr("cv_scores", cv_scores)
+        trial.set_user_attr("cv_scores", cv_scores.tolist())
         return _score_mean(cv_scores)
 
     study = optuna.create_study(direction="minimize")
@@ -282,19 +282,20 @@ def lgbm_optuna_search(
     return study, best_pipeline
 
 
-def create_model_gridsearch(
+def ridge_gridsearch(
     param_grid: Optional[dict[str, list]] = None,
     n_splits: int = 5,
     scoring: str = "neg_root_mean_squared_log_error",
     n_jobs: int = -1,
     verbose: int = 1,
     drop_features: list[str] = None,
+    random_state: int = 42,
 ) -> GridSearchCV:
     pipeline = Pipeline(
         [
             ("feature_dropper", FeatureDropper(drop_features)),
             ("scaler", StandardScaler()),
-            ("selector", SelectFromModel(Lasso(random_state=42))),
+            ("selector", SelectFromModel(Lasso(random_state=random_state))),
             ("ridge", Ridge()),
         ]
     )

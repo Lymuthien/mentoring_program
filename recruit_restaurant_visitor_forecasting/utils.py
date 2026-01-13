@@ -1,4 +1,5 @@
 import numpy as np
+import optuna
 import pandas as pd
 import statsmodels.api as sm
 from recruit_restaurant_visitor_forecasting.config import (
@@ -132,3 +133,32 @@ def get_format(orig_df, labels):
         orig_df[AIR_RESTAURANT_ID_COL] + "_" + orig_df[VISIT_DATE_COL].astype(str)
     )
     return labels.reset_index(drop=True)
+
+
+def optuna_cv_results_to_df(study: optuna.Study) -> pd.DataFrame:
+    records = []
+
+    for t in study.trials:
+        scores = t.user_attrs.get("cv_scores")
+        if scores is None:
+            continue
+
+        std_score = float(np.std(scores))
+
+        rec = {
+            "params": t.params,
+            "std_test_score": std_score,
+            "mean_test_score": t.value,
+        }
+        for i, s in enumerate(scores):
+            rec[f"split_test_{i}"] = s
+        records.append(rec)
+
+    df = pd.DataFrame(records)
+
+    ascending = study.direction == optuna.study.StudyDirection.MINIMIZE
+    df["rank_test_score"] = df["mean_test_score"].rank(
+        method="min", ascending=ascending
+    ).astype(int)
+
+    return df
