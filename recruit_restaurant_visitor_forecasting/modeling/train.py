@@ -1,13 +1,13 @@
 import numpy as np
+import optuna
 import pandas as pd
 import shap
-from sklearn.base import TransformerMixin, BaseEstimator
-from sklearn.feature_selection import SelectFromModel
-from sklearn.linear_model import Ridge, Lasso
 from lightgbm import LGBMRegressor
-from boruta import BorutaPy
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.feature_selection import SelectFromModel
+from sklearn.linear_model import Lasso, Ridge
 from sklearn.metrics import mean_squared_log_error, make_scorer
-from sklearn.model_selection import TimeSeriesSplit, cross_val_score, GridSearchCV
+from sklearn.model_selection import GridSearchCV, cross_val_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from typing import Optional, Union
@@ -168,32 +168,6 @@ def shap_fs(
     return selected_features, imp_df
 
 
-def boruta_fs(
-    X: pd.DataFrame,
-    y: pd.Series,
-    model,
-    boruta_params: dict,
-) -> tuple[list[str], pd.DataFrame]:
-    boruta = BorutaPy(model, **boruta_params)
-    boruta.fit(X.values, y.values)
-
-    selected_mask = boruta.support_ | boruta.support_weak_
-    selected_features = X.columns[selected_mask].tolist()
-
-    status_dict = pd.DataFrame(
-        [
-            {
-                "feature": feature,
-                "status": "confirmed" if boruta.support_[i] else "tentative",
-            }
-            for i, feature in enumerate(X.columns)
-            if selected_mask[i]
-        ]
-    )
-
-    return selected_features, status_dict
-
-
 def build_feature_drop_list(
     all_columns: list[str],
     selected_features: list[str],
@@ -201,11 +175,22 @@ def build_feature_drop_list(
     drop_set = set(all_columns) - set(selected_features)
     return list(drop_set)
 
+
 def rmsle(y_true, y_pred) -> float:
     y_pred = np.maximum(y_pred, 0)
     return np.sqrt(mean_squared_log_error(y_true, y_pred))
 
+
 RMSLE_SCORER = make_scorer(rmsle, greater_is_better=False)
+
+
+def _build_lgbm_pipeline(drop_features: list[str], random_state: int) -> Pipeline:
+    return Pipeline(
+        [
+            ("feature_dropper", FeatureDropper(drop_features)),
+            ("model", LGBMRegressor(random_state=random_state, verbose=-1)),
+        ]
+    )
 
 
 def lgbm_gridsearch(
@@ -215,17 +200,11 @@ def lgbm_gridsearch(
     n_jobs: int = -1,
     verbose: int = 1,
     drop_features: list[str] = None,
+    random_state: int = 42,
 ) -> GridSearchCV:
-    pipeline = Pipeline(
-        [
-            ("feature_dropper", FeatureDropper(drop_features)),
-            ("model", LGBMRegressor(random_state=42, verbose=-1)),
-        ]
-    )
+    pipeline = _build_lgbm_pipeline(drop_features, random_state)
 
-    tscv = ExpandingWindowSplit(
-        n_splits=n_splits, test_size=1, date_col=VISIT_DATE_COL
-    )
+    tscv = ExpandingWindowSplit(n_splits=n_splits, test_size=1, date_col=VISIT_DATE_COL)
     grid_search = GridSearchCV(
         estimator=pipeline,
         param_grid=param_grid,
@@ -238,6 +217,69 @@ def lgbm_gridsearch(
     )
 
     return grid_search
+
+
+def lgbm_optuna_search(
+    X: pd.DataFrame,
+    y: pd.Series,
+    n_trials: int = 50,
+    n_splits: int = 5,
+    scoring: Union[str, callable] = RMSLE_SCORER,
+    n_jobs: int = -1,
+    timeout: Optional[int] = None,
+    drop_features: list[str] = None,
+    random_state: int = 42,
+) -> tuple[optuna.Study, Pipeline]:
+    drop_features = drop_features or []
+
+    tscv = ExpandingWindowSplit(
+        n_splits=n_splits,
+        test_size=1,
+        date_col=VISIT_DATE_COL,
+    )
+
+    def _score_mean(cv_scores: np.ndarray) -> float:
+        if (hasattr(scoring, "_sign") and getattr(scoring, "_sign") == -1) or (
+            isinstance(scoring, str) and scoring.startswith("neg_")
+        ):
+            return float(-cv_scores.mean())
+        return float(cv_scores.mean())
+
+    def objective(trial: optuna.trial.Trial) -> float:
+        params = {
+            "num_leaves": trial.suggest_int("num_leaves", 8, 32),
+            "max_depth": trial.suggest_int("max_depth", 3, 5),
+            "learning_rate": trial.suggest_float("learning_rate", 1e-2, 0.3, log=True),
+            "n_estimators": trial.suggest_int("n_estimators", 100, 250),
+            "subsample": trial.suggest_float("subsample", 0.5, 1.0),
+            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
+            "min_child_samples": trial.suggest_int("min_child_samples", 10, 30),
+            "reg_alpha": trial.suggest_float("reg_alpha", 1e-4, 10.0),
+            "reg_lambda": trial.suggest_float("reg_lambda", 1e-4, 10.0),
+        }
+
+        pipeline = _build_lgbm_pipeline(drop_features, random_state)
+        pipeline.set_params(**{f"model__{k}": v for k, v in params.items()})
+
+        cv_scores = cross_val_score(
+            pipeline,
+            X,
+            y,
+            cv=tscv,
+            scoring=scoring,
+            n_jobs=1,
+        )
+        trial.set_user_attr("cv_scores", cv_scores)
+        return _score_mean(cv_scores)
+
+    study = optuna.create_study(direction="minimize")
+    study.optimize(objective, n_trials=n_trials, timeout=timeout, n_jobs=n_jobs)
+
+    best_pipeline = _build_lgbm_pipeline(drop_features, random_state)
+    best_pipeline.set_params(**{f"model__{k}": v for k, v in study.best_params.items()})
+    best_pipeline.fit(X, y)
+
+    return study, best_pipeline
 
 
 def create_model_gridsearch(
@@ -282,44 +324,3 @@ def create_model_gridsearch(
     )
 
     return grid_search
-
-
-def evaluate_model(
-    model: Pipeline,
-    X: pd.DataFrame,
-    y: pd.Series,
-    cv_splits: int = 5,
-) -> dict:
-    tscv = TimeSeriesSplit(n_splits=cv_splits)
-
-    X_array = X.values
-    y_array = y.values
-
-    rmse_scores = -cross_val_score(
-        model,
-        X_array,
-        y_array,
-        cv=tscv,
-        scoring="neg_root_mean_squared_error",
-        n_jobs=-1,
-    )
-    mae_scores = -cross_val_score(
-        model, X_array, y_array, cv=tscv, scoring="neg_mean_absolute_error", n_jobs=-1
-    )
-    r2_scores = cross_val_score(
-        model, X_array, y_array, cv=tscv, scoring="r2", n_jobs=-1
-    )
-
-    results = {
-        "rmse_mean": rmse_scores.mean(),
-        "rmse_std": rmse_scores.std(),
-        "mae_mean": mae_scores.mean(),
-        "mae_std": mae_scores.std(),
-        "r2_mean": r2_scores.mean(),
-        "r2_std": r2_scores.std(),
-        "rmse_scores": rmse_scores.tolist(),
-        "mae_scores": mae_scores.tolist(),
-        "r2_scores": r2_scores.tolist(),
-    }
-
-    return results
