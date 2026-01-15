@@ -115,17 +115,30 @@ class ExpandingWindowSplit:
 
 
 class FeatureDropper(TransformerMixin, BaseEstimator):
-    def __init__(self, features: list[str] = None):
-        self.features = features or []
+    def __init__(
+        self,
+        drop_features: list[str] = None,
+        features_top: list[str] = None,
+        keep_count: int = None,
+    ):
+        self.drop_features = drop_features
+        self.features_top = features_top
+        self.keep_count = keep_count
 
     def fit(self, X, y=None):
         return self
 
     def transform(self, X):
-        if not self.features:
-            return X
+        if self.drop_features:
+            X = X.drop(columns=[f for f in self.drop_features if f in X.columns])
 
-        X = X.drop(columns=[f for f in self.features if f in X.columns])
+        if self.features_top:
+            if not self.keep_count:
+                return X
+
+            drop_features = self.features_top[self.keep_count :]
+            X = X.drop(columns=[f for f in drop_features if f in X.columns])
+
         return X
 
 
@@ -135,7 +148,7 @@ def shap_fs(
     model,
     drop_features: list[str] = None,
     test_size: float = 0.2,
-    top_k: int = 35,
+    top_k: int = None,
 ) -> tuple[list[str], pd.DataFrame]:
     drop_features = set(drop_features or [])
     X_train, X_test, y_train, y_test = train_test_split_by_date(
@@ -163,7 +176,10 @@ def shap_fs(
         .reset_index(drop=True)
     )
 
-    selected_features = imp_df.head(top_k)["feature"].tolist()
+    if top_k:
+        selected_features = imp_df.head(top_k)["feature"].tolist()
+    else:
+        selected_features = imp_df["feature"].tolist()
 
     return selected_features, imp_df
 
@@ -184,10 +200,15 @@ def rmsle(y_true, y_pred) -> float:
 RMSLE_SCORER = make_scorer(rmsle, greater_is_better=False)
 
 
-def _build_lgbm_pipeline(drop_features: list[str], random_state: int) -> Pipeline:
+def _build_lgbm_pipeline(
+    drop_features: list[str],
+    random_state: int,
+    top_features: list[str] = None,
+    f_count: int = None,
+) -> Pipeline:
     return Pipeline(
         [
-            ("feature_dropper", FeatureDropper(drop_features)),
+            ("feature_dropper", FeatureDropper(drop_features, top_features, f_count)),
             ("model", LGBMRegressor(random_state=random_state, verbose=-1)),
         ]
     )
@@ -228,13 +249,15 @@ def lgbm_optuna_search(
     n_jobs: int = -1,
     timeout: Optional[int] = None,
     drop_features: list[str] = None,
+    features_top: list[str] = None,
     random_state: int = 42,
+    window_test_size: int = 1,
 ) -> tuple[optuna.Study, Pipeline]:
     drop_features = drop_features or []
 
     tscv = ExpandingWindowSplit(
         n_splits=n_splits,
-        test_size=1,
+        test_size=window_test_size,
         date_col=VISIT_DATE_COL,
     )
 
@@ -258,8 +281,14 @@ def lgbm_optuna_search(
             "reg_lambda": trial.suggest_float("reg_lambda", 1e-4, 10.0),
         }
 
-        pipeline = _build_lgbm_pipeline(drop_features, random_state)
+        pipeline = _build_lgbm_pipeline(drop_features, random_state, features_top)
         pipeline.set_params(**{f"model__{k}": v for k, v in params.items()})
+
+        if features_top:
+            fd_params = {
+                "feature_dropper__keep_count": trial.suggest_int("keep_count", 10, 43)
+            }
+            pipeline.set_params(**fd_params)
 
         cv_scores = cross_val_score(
             pipeline,
@@ -274,9 +303,15 @@ def lgbm_optuna_search(
 
     study = optuna.create_study(direction="minimize")
     study.optimize(objective, n_trials=n_trials, timeout=timeout, n_jobs=n_jobs)
+    best_params = study.best_params.copy()
 
-    best_pipeline = _build_lgbm_pipeline(drop_features, random_state)
-    best_pipeline.set_params(**{f"model__{k}": v for k, v in study.best_params.items()})
+    best_pipeline = _build_lgbm_pipeline(drop_features, random_state, features_top)
+    if "keep_count" in best_params:
+        best_pipeline.set_params(
+            **{"feature_dropper__keep_count": best_params.pop("keep_count")}
+        )
+
+    best_pipeline.set_params(**{f"model__{k}": v for k, v in best_params.items()})
     best_pipeline.fit(X, y)
 
     return study, best_pipeline
