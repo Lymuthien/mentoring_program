@@ -270,23 +270,26 @@ def lgbm_optuna_search(
 
     def objective(trial: optuna.trial.Trial) -> float:
         params = {
-            "num_leaves": trial.suggest_int("num_leaves", 8, 32),
             "max_depth": trial.suggest_int("max_depth", 3, 5),
-            "learning_rate": trial.suggest_float("learning_rate", 1e-2, 0.3, log=True),
-            "n_estimators": trial.suggest_int("n_estimators", 100, 250),
+            "learning_rate": trial.suggest_float("learning_rate", 1e-3, 0.3, log=True),
+            "n_estimators": trial.suggest_int("n_estimators", 100, 300),
             "subsample": trial.suggest_float("subsample", 0.5, 1.0),
             "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
-            "min_child_samples": trial.suggest_int("min_child_samples", 10, 30),
-            "reg_alpha": trial.suggest_float("reg_alpha", 1e-4, 10.0),
-            "reg_lambda": trial.suggest_float("reg_lambda", 1e-4, 10.0),
+            "min_child_samples": trial.suggest_int("min_child_samples", 10, 35),
+            "reg_alpha": trial.suggest_float("reg_alpha", 1e-4, 10.0, log=True),
+            "reg_lambda": trial.suggest_float("reg_lambda", 1e-4, 10.0, log=True),
         }
+        max_depth = params["max_depth"]
+        params["num_leaves"] = trial.suggest_int(
+            "num_leaves", 2**max_depth // 2, 2**max_depth
+        )
 
         pipeline = _build_lgbm_pipeline(drop_features, random_state, features_top)
         pipeline.set_params(**{f"model__{k}": v for k, v in params.items()})
 
         if features_top:
             fd_params = {
-                "feature_dropper__keep_count": trial.suggest_int("keep_count", 10, 43)
+                "feature_dropper__keep_count": trial.suggest_int("keep_count", 10, 49)
             }
             pipeline.set_params(**fd_params)
 

@@ -67,7 +67,14 @@ def update_features_for_date(
     df = df.sort_values([VISIT_DATE_COL, id_col]).reset_index(drop=True)
     original_cols = set(df.columns)
 
-    df = add_basic_stats(df, VISITORS_COL, id_col)
+    aggs = [
+        ("mean", {}),
+        ("median", {}),
+        ("std", {"ddof": 0}),
+        ("max", {}),
+        ("min", {}),
+    ]
+    df = add_basic_stats(df, VISITORS_COL, id_col, aggs=aggs)
     df = add_neighbors_stats(df, VISITORS_COL, CITY_COL)
 
     df = add_last_month_visitors(df, VISITORS_COL)
@@ -145,7 +152,7 @@ def recursive_predict(
         y_pred = model.predict(X_current)
         y_pred = np.maximum(y_pred, 0)
 
-        combined.loc[current_features.index, VISITORS_COL] = y_pred
+        combined.loc[current_features.index, VISITORS_COL] = y_pred.astype("int64")
 
         test_date_mask = test_features[VISIT_DATE_COL] == date
         test_date_df = test_features[test_date_mask]
