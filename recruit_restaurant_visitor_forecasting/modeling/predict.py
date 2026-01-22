@@ -115,7 +115,6 @@ def recursive_predict(
     drop_cols: list,
 ) -> tuple[pd.Series, pd.DataFrame]:
     id_col = AIR_RESTAURANT_ID_COL
-    idx_cols = [id_col, VISIT_DATE_COL]
     feature_exclude = {id_col, VISIT_DATE_COL, VISITORS_COL, *drop_cols}
 
     combined = pd.concat(
@@ -139,20 +138,19 @@ def recursive_predict(
         if not missing_cols.empty:
             combined[missing_cols] = np.nan
 
-        combined = combined.set_index(idx_cols)
-        updated_features = updated_features.set_index(idx_cols)
-        combined.update(updated_features)
-        combined = combined.reset_index()
+        date_mask = combined[VISIT_DATE_COL] == date
 
-        date_mask = (combined[VISIT_DATE_COL] == date) & (
-            combined.index >= len(train_features)
-        )
+        cols_to_update = updated_features.columns.difference([VISITORS_COL])
+        combined.loc[date_mask, cols_to_update] = updated_features[
+            cols_to_update
+        ].values
+
         current_features = combined[date_mask]
         X_current = current_features.drop(columns=feature_exclude)
         y_pred = model.predict(X_current)
         y_pred = np.maximum(y_pred, 0)
 
-        combined.loc[current_features.index, VISITORS_COL] = y_pred.astype("int64")
+        combined.loc[current_features.index, VISITORS_COL] = y_pred
 
         test_date_mask = test_features[VISIT_DATE_COL] == date
         test_date_df = test_features[test_date_mask]

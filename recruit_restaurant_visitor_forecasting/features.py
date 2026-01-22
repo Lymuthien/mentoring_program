@@ -390,25 +390,17 @@ def add_total_nbr_reserves(
     return df
 
 
-def rolling_agg(
-    s: pd.Series,
-    window: int,
-    agg: str,
-    open_usually: pd.Series | None = None,
-    **agg_kwargs,
+def prepare_masked_series(
+    df: pd.DataFrame, target_col: str, open_col: str, id_col: str
 ) -> pd.Series:
-    s = s.shift(1)
+    s = df.groupby(id_col)[target_col].shift(1)
 
-    if open_usually is not None:
-        ou = open_usually.loc[s.index]
-        mask_replace = (ou == 0) & (s == 0)
-        s_nonzero = s.where(~mask_replace, np.nan)
-    else:
-        s_nonzero = s
+    if open_col in df.columns:
+        ou = df[open_col]
+        mask = (ou == 0) & (s == 0)
+        s = s.mask(mask)
 
-    res = s_nonzero.rolling(window, min_periods=1).agg(agg, **agg_kwargs)
-
-    return res
+    return s
 
 
 def add_basic_stats(
@@ -421,8 +413,6 @@ def add_basic_stats(
     if windows is None:
         windows = [7, 14, 28]
 
-    df = df.copy().sort_values([id_col, VISIT_DATE_COL])
-
     if aggs is None:
         aggs = [
             ("mean", {}),
@@ -430,20 +420,26 @@ def add_basic_stats(
             ("std", {"ddof": 0}),
         ]
 
-    open_s = df[OPEN_USUALLY_COL] if OPEN_USUALLY_COL in df.columns else None
-    grouping = df.groupby(id_col)[target_col]
+    df = df.sort_values([id_col, VISIT_DATE_COL]).copy()
 
-    new_cols = {}
+    masked = prepare_masked_series(
+        df,
+        target_col,
+        OPEN_USUALLY_COL,
+        id_col,
+    )
+
+    grouped = masked.groupby(df[id_col])
+    result = df
+
     for window in windows:
-        for agg_name, agg_kwargs in aggs:
-            col_name = f"{target_col}_{agg_name}_{window}"
-            new_cols[col_name] = grouping.transform(
-                lambda x: rolling_agg(x, window, agg_name, open_s, **agg_kwargs)
-            )
+        r = grouped.rolling(window, min_periods=1)
 
-    df = df.assign(**new_cols)
+        for agg, agg_kwargs in aggs:
+            col = f"{target_col}_{agg}_{window}"
+            result[col] = r.agg(agg, **agg_kwargs).reset_index(level=0, drop=True)
 
-    return df
+    return result
 
 
 def add_neighbors_stats(
