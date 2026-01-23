@@ -2,14 +2,9 @@ import numpy as np
 import optuna
 import pandas as pd
 import shap
-from lightgbm import LGBMRegressor
-from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.feature_selection import SelectFromModel
-from sklearn.linear_model import Lasso, Ridge
-from sklearn.metrics import mean_squared_log_error, make_scorer
-from sklearn.model_selection import GridSearchCV, cross_val_score
+from sklearn.base import TransformerMixin, BaseEstimator
+from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
 from typing import Optional, Union
 
 from recruit_restaurant_visitor_forecasting.config import (
@@ -17,6 +12,15 @@ from recruit_restaurant_visitor_forecasting.config import (
     VISIT_DATE_COL,
 )
 from recruit_restaurant_visitor_forecasting.dataset import DataDir, read_csv
+from recruit_restaurant_visitor_forecasting.modeling.cv import (
+    ExpandingWindowSplit,
+    cv_recursive_score,
+)
+from recruit_restaurant_visitor_forecasting.modeling.pipeline import (
+    build_lgbm_pipeline,
+    build_ridge_pipeline,
+)
+from recruit_restaurant_visitor_forecasting.utils import rmsle_scorer, rmsle
 
 
 def load_data() -> tuple:
@@ -63,85 +67,6 @@ def train_test_split_by_date(
     return X_train, X_test, y_train, y_test
 
 
-class ExpandingWindowSplit:
-    def __init__(self, test_size, date_col, n_splits=5, max_train_size=None):
-        self.n_splits = n_splits
-        self.max_train_size = max_train_size
-        self.test_size = test_size
-        self.date_col = date_col
-
-    def split(self, X, y=None, groups=None):
-        dates = (
-            pd.Series(X[self.date_col].unique()).sort_values().reset_index(drop=True)
-        )
-        n_dates = len(dates)
-        n_splits = self.n_splits
-        test_size = self.test_size
-
-        if n_dates - n_splits * test_size <= 0:
-            raise ValueError(
-                f"Too many splits={n_splits} for number of dates"
-                f"={n_dates} with test_size={test_size}."
-            )
-
-        indices = pd.Series(np.arange(len(X)), index=X.index)
-        date_to_indices = {}
-        for date, group_indices in X.groupby(self.date_col).groups.items():
-            date_to_indices[date] = indices.loc[group_indices].values
-        test_starts = range(n_dates - n_splits * test_size, n_dates, test_size)
-
-        for test_start in test_starts:
-            test_end = test_start + test_size
-            test_dates = dates.iloc[test_start:test_end]
-
-            train_end = test_start
-            if self.max_train_size and self.max_train_size < train_end:
-                train_start = train_end - self.max_train_size
-            else:
-                train_start = 0
-            train_dates = dates.iloc[train_start:train_end]
-
-            train_indices = np.concatenate(
-                [date_to_indices[date] for date in train_dates]
-            )
-            test_indices = np.concatenate(
-                [date_to_indices[date] for date in test_dates]
-            )
-
-            yield train_indices, test_indices
-
-    def get_n_splits(self, X=None, y=None, groups=None):
-        return self.n_splits
-
-
-class FeatureDropper(TransformerMixin, BaseEstimator):
-    def __init__(
-        self,
-        drop_features: list[str] = None,
-        features_top: list[str] = None,
-        keep_count: int = None,
-    ):
-        self.drop_features = drop_features
-        self.features_top = features_top
-        self.keep_count = keep_count
-
-    def fit(self, X, y=None):
-        return self
-
-    def transform(self, X):
-        if self.drop_features:
-            X = X.drop(columns=[f for f in self.drop_features if f in X.columns])
-
-        if self.features_top:
-            if not self.keep_count:
-                return X
-
-            drop_features = self.features_top[self.keep_count :]
-            X = X.drop(columns=[f for f in drop_features if f in X.columns])
-
-        return X
-
-
 def shap_fs(
     X: pd.DataFrame,
     y: pd.Series,
@@ -184,46 +109,16 @@ def shap_fs(
     return selected_features, imp_df
 
 
-def build_feature_drop_list(
-    all_columns: list[str],
-    selected_features: list[str],
-) -> list[str]:
-    drop_set = set(all_columns) - set(selected_features)
-    return list(drop_set)
-
-
-def rmsle(y_true, y_pred) -> float:
-    y_pred = np.maximum(y_pred, 0)
-    return np.sqrt(mean_squared_log_error(y_true, y_pred))
-
-
-RMSLE_SCORER = make_scorer(rmsle, greater_is_better=False)
-
-
-def _build_lgbm_pipeline(
-    drop_features: list[str],
-    random_state: int,
-    top_features: list[str] = None,
-    f_count: int = None,
-) -> Pipeline:
-    return Pipeline(
-        [
-            ("feature_dropper", FeatureDropper(drop_features, top_features, f_count)),
-            ("model", LGBMRegressor(random_state=random_state, verbose=-1)),
-        ]
-    )
-
-
 def lgbm_gridsearch(
     param_grid: dict[str, list],
     n_splits: int = 5,
-    scoring: Union[str, callable] = RMSLE_SCORER,
+    scoring: Union[str, callable] = rmsle_scorer,
     n_jobs: int = -1,
     verbose: int = 1,
     drop_features: list[str] = None,
     random_state: int = 42,
 ) -> GridSearchCV:
-    pipeline = _build_lgbm_pipeline(drop_features, random_state)
+    pipeline = build_lgbm_pipeline(drop_features, random_state)
 
     tscv = ExpandingWindowSplit(n_splits=n_splits, test_size=1, date_col=VISIT_DATE_COL)
     grid_search = GridSearchCV(
@@ -245,7 +140,7 @@ def lgbm_optuna_search(
     y: pd.Series,
     n_trials: int = 50,
     n_splits: int = 5,
-    scoring: Union[str, callable] = RMSLE_SCORER,
+    scoring: Union[str, callable] = rmsle,
     n_jobs: int = -1,
     timeout: Optional[int] = None,
     drop_features: list[str] = None,
@@ -284,7 +179,7 @@ def lgbm_optuna_search(
             "num_leaves", 2**max_depth // 2, 2**max_depth
         )
 
-        pipeline = _build_lgbm_pipeline(drop_features, random_state, features_top)
+        pipeline = build_lgbm_pipeline(drop_features, random_state, features_top)
         pipeline.set_params(**{f"model__{k}": v for k, v in params.items()})
 
         if features_top:
@@ -293,13 +188,13 @@ def lgbm_optuna_search(
             }
             pipeline.set_params(**fd_params)
 
-        cv_scores = cross_val_score(
+        cv_scores = cv_recursive_score(
             pipeline,
             X,
             y,
             cv=tscv,
             scoring=scoring,
-            n_jobs=1,
+            n_jobs=8,
         )
         trial.set_user_attr("cv_scores", cv_scores.tolist())
         return _score_mean(cv_scores)
@@ -308,7 +203,7 @@ def lgbm_optuna_search(
     study.optimize(objective, n_trials=n_trials, timeout=timeout, n_jobs=n_jobs)
     best_params = study.best_params.copy()
 
-    best_pipeline = _build_lgbm_pipeline(drop_features, random_state, features_top)
+    best_pipeline = build_lgbm_pipeline(drop_features, random_state, features_top)
     if "keep_count" in best_params:
         best_pipeline.set_params(
             **{"feature_dropper__keep_count": best_params.pop("keep_count")}
@@ -329,14 +224,7 @@ def ridge_gridsearch(
     drop_features: list[str] = None,
     random_state: int = 42,
 ) -> GridSearchCV:
-    pipeline = Pipeline(
-        [
-            ("feature_dropper", FeatureDropper(drop_features)),
-            ("scaler", StandardScaler()),
-            ("selector", SelectFromModel(Lasso(random_state=random_state))),
-            ("ridge", Ridge()),
-        ]
-    )
+    pipeline = build_ridge_pipeline(drop_features, random_state)
 
     if param_grid is None:
         param_grid = [
@@ -363,3 +251,31 @@ def ridge_gridsearch(
     )
 
     return grid_search
+
+
+class FeatureDropper(TransformerMixin, BaseEstimator):
+    def __init__(
+        self,
+        drop_features: list[str] = None,
+        features_top: list[str] = None,
+        keep_count: int = None,
+    ):
+        self.drop_features = drop_features
+        self.features_top = features_top
+        self.keep_count = keep_count
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        if self.drop_features:
+            X = X.drop(columns=[f for f in self.drop_features if f in X.columns])
+
+        if self.features_top:
+            if not self.keep_count:
+                return X
+
+            drop_features = self.features_top[self.keep_count :]
+            X = X.drop(columns=[f for f in drop_features if f in X.columns])
+
+        return X

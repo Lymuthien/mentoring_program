@@ -84,8 +84,25 @@ VISITORS_DOW_MEAN_COL = "visitors_dow_mean"
 VISITORS_DOW_MEAN_NBR_COL = VISITORS_DOW_MEAN_COL + NBRS_SUFFIX
 RES_VISITORS_DIFF_COL = "res_visitors_diff"
 RES_VISITORS_DIFF_NBR_COL = "nbr_res_visitors_diff"
+GOLDEN_WEEK_FLG = "golden_week_flg"
 
 DAYS_OF_WEEK = ["Mon", "Tue", "Wed", "Th", "Fri", "Sat", "Sun"]
 
 ACTUAL_MEAN = "actual_mean"
 PRED_MEAN = "predicted_mean"
+
+USELESS_FEATURES = [
+    *[
+        VISITORS_NBR_COL + suffix
+        for suffix in ["_mean_7", "_mean_14", "_median_7", "_median_28"]
+    ],
+    GOLDEN_WEEK_FLG,
+]
+DROP_COLUMNS = [
+    AIR_RESTAURANT_ID_COL,
+    VISIT_DATE_COL,
+    VISITORS_NBR_COL,
+    DAY_OF_WEEK_COL,
+    CITY_COL,
+    *USELESS_FEATURES,
+]

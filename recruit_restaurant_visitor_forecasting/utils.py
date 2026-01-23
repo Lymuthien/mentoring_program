@@ -2,6 +2,8 @@ import numpy as np
 import optuna
 import pandas as pd
 import statsmodels.api as sm
+from sklearn.metrics import mean_squared_log_error, make_scorer
+
 from recruit_restaurant_visitor_forecasting.config import (
     AIR_DAILY_COL,
     HPG_DAILY_COL,
@@ -112,21 +114,6 @@ def merge_daily_pred(
     return daily
 
 
-def convert_to_serializable(obj):
-    if isinstance(obj, np.integer):
-        return int(obj)
-    elif isinstance(obj, np.floating):
-        return float(obj)
-    elif isinstance(obj, np.ndarray):
-        return obj.tolist()
-    elif isinstance(obj, (list, tuple)):
-        return [convert_to_serializable(item) for item in obj]
-    elif isinstance(obj, dict):
-        return {k: convert_to_serializable(v) for k, v in obj.items()}
-    else:
-        return obj
-
-
 def get_format(orig_df, labels):
     labels = labels.to_frame(VISITORS_COL)
     labels["id"] = (
@@ -162,3 +149,19 @@ def optuna_cv_results_to_df(study: optuna.Study) -> pd.DataFrame:
     ).astype(int)
 
     return df
+
+
+def build_feature_drop_list(
+    all_columns: list[str],
+    selected_features: list[str],
+) -> list[str]:
+    drop_set = set(all_columns) - set(selected_features)
+    return list(drop_set)
+
+
+def rmsle(y_true, y_pred) -> float:
+    y_pred = np.maximum(y_pred, 0)
+    return np.sqrt(mean_squared_log_error(y_true, y_pred))
+
+
+rmsle_scorer = make_scorer(rmsle, greater_is_better=False)
