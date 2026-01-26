@@ -114,13 +114,12 @@ def recursive_predict(
     drop_cols: list,
 ) -> tuple[pd.Series, pd.DataFrame]:
     id_col = AIR_RESTAURANT_ID_COL
-    idx_cols = [id_col, VISIT_DATE_COL]
     feature_exclude = {id_col, VISIT_DATE_COL, VISITORS_COL, *drop_cols}
 
     combined = pd.concat(
         [train_features.copy(), test_features.copy()], ignore_index=True
     )
-    combined[VISITORS_COL] = 0
+    combined[VISITORS_COL] = 0.0
     combined.loc[: len(train_features) - 1, VISITORS_COL] = train_labels.values
 
     test_dates = sorted(test_features[VISIT_DATE_COL].unique())
@@ -146,7 +145,7 @@ def recursive_predict(
 
         current_features = combined[date_mask]
         X_current = current_features.drop(columns=feature_exclude)
-        y_pred = model.predict(X_current).astype("int64")
+        y_pred = model.predict(X_current)
         y_pred = np.maximum(y_pred, 0)
 
         combined.loc[current_features.index, VISITORS_COL] = y_pred

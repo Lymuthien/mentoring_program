@@ -166,8 +166,8 @@ def lgbm_optuna_search(
     def objective(trial: optuna.trial.Trial) -> float:
         params = {
             "max_depth": trial.suggest_int("max_depth", 3, 5),
-            "learning_rate": trial.suggest_float("learning_rate", 1e-3, 0.3, log=True),
-            "n_estimators": trial.suggest_int("n_estimators", 100, 300),
+            "learning_rate": trial.suggest_float("learning_rate", 1e-2, 0.3, log=True),
+            "n_estimators": trial.suggest_int("n_estimators", 100, 1000),
             "subsample": trial.suggest_float("subsample", 0.5, 1.0),
             "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
             "min_child_samples": trial.suggest_int("min_child_samples", 10, 35),
