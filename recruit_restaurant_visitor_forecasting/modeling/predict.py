@@ -114,6 +114,7 @@ def recursive_predict(
     drop_cols: list,
 ) -> tuple[pd.Series, pd.DataFrame]:
     id_col = AIR_RESTAURANT_ID_COL
+    idx_cols = [id_col, VISIT_DATE_COL]
     feature_exclude = {id_col, VISIT_DATE_COL, VISITORS_COL, *drop_cols}
 
     combined = pd.concat(
@@ -137,13 +138,13 @@ def recursive_predict(
             combined[missing_cols] = np.nan
 
         date_mask = combined[VISIT_DATE_COL] == date
-        current_features = combined[date_mask]
 
         cols_to_update = updated_features.columns.difference([VISITORS_COL])
-        combined.loc[current_features.index, cols_to_update] = updated_features[
+        combined.loc[date_mask, cols_to_update] = updated_features[
             cols_to_update
         ].values
 
+        current_features = combined[date_mask]
         X_current = current_features.drop(columns=feature_exclude)
         y_pred = model.predict(X_current).astype("int64")
         y_pred = np.maximum(y_pred, 0)
@@ -156,7 +157,6 @@ def recursive_predict(
         result.loc[test_date_indices] = y_pred
 
     return result, combined
-
 
 
 # def recursive_predict(
