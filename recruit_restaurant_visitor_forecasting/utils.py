@@ -1,8 +1,9 @@
+import mlflow
 import numpy as np
 import optuna
 import pandas as pd
 import statsmodels.api as sm
-from sklearn.metrics import mean_squared_log_error, make_scorer
+from sklearn.metrics import mean_squared_log_error
 
 from recruit_restaurant_visitor_forecasting.config import (
     AIR_DAILY_COL,
@@ -162,6 +163,3 @@ def build_feature_drop_list(
 def rmsle(y_true, y_pred) -> float:
     y_pred = np.maximum(y_pred, 0)
     return np.sqrt(mean_squared_log_error(y_true, y_pred))
-
-
-rmsle_scorer = make_scorer(rmsle, greater_is_better=False)
