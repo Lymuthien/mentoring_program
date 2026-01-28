@@ -450,7 +450,7 @@ def add_neighbors_stats(
     rename_col: bool = True,
 ):
     orig_df = df
-    df = df.copy()[[VISIT_DATE_COL, grouping_col, target_col, OPEN_USUALLY_COL]]
+    df = df[[VISIT_DATE_COL, grouping_col, target_col, OPEN_USUALLY_COL]].copy()
     if rename_col:
         nbr_target = nbrs_col(target_col)
         df.rename(columns={target_col: nbr_target}, inplace=True)
@@ -458,14 +458,20 @@ def add_neighbors_stats(
         nbr_target = target_col
         orig_df = orig_df.drop(columns=[target_col])
 
-    mask_replace = (df[OPEN_USUALLY_COL] == 0) & (df[nbr_target] == 0)
-    df[nbr_target] = df[nbr_target].where(~mask_replace, np.nan)
+    df.loc[(df[OPEN_USUALLY_COL] == 0) & (df[nbr_target] == 0), nbr_target] = np.nan
+
     df = df.drop(columns=[OPEN_USUALLY_COL])
 
     means = df.groupby([VISIT_DATE_COL, grouping_col])[nbr_target].mean()
     res = add_basic_stats(means.reset_index(), nbr_target, grouping_col, aggs)
 
-    df = orig_df.merge(res, on=[VISIT_DATE_COL, grouping_col], how="left")
+    cols_to_replace = res.columns.difference([VISIT_DATE_COL, grouping_col])
+    orig_df = orig_df.drop(columns=cols_to_replace, errors="ignore")
+
+    df = orig_df.join(
+        res.set_index([VISIT_DATE_COL, grouping_col]), on=[VISIT_DATE_COL, grouping_col]
+    )
+
     return df
 
 
@@ -536,22 +542,22 @@ def add_lags(
     lags: tuple[int, ...],
     use_nbrs: bool = False,
 ) -> pd.DataFrame:
-    df = df.copy()
     df = df.sort_values([id_col, VISIT_DATE_COL])
 
     if use_nbrs:
-        df_gr = df.groupby([id_col, VISIT_DATE_COL])[target_col].mean().to_frame()
-        grouped = df_gr.groupby(level=0)[target_col]
+        df_gr = df.groupby([id_col, VISIT_DATE_COL], sort=False)[target_col].mean()
+        grouped = df_gr.groupby(level=0)
 
-        new_cols = {lag_col(target_col, lag): grouped.shift(lag) for lag in lags}
-        df_gr = df_gr.assign(**new_cols)
-        df_gr = df_gr.reset_index().drop(target_col, axis=1)
-        df = df.merge(df_gr, on=[id_col, VISIT_DATE_COL], how="left")
+        for lag in lags:
+            shifted = grouped.shift(lag)
+            df[lag_col(target_col, lag)] = shifted.reindex(
+                pd.MultiIndex.from_frame(df[[id_col, VISIT_DATE_COL]])
+            ).values
     else:
         grouped = df.groupby(id_col)[target_col]
 
-        new_cols = {lag_col(target_col, lag): grouped.shift(lag) for lag in lags}
-        df = df.assign(**new_cols)
+        for lag in lags:
+            df[lag_col(target_col, lag)] = grouped.shift(lag).values
 
     return df
 

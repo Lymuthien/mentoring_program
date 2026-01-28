@@ -156,6 +156,7 @@ def lgbm_optuna_search(
     features_top: list[str] = None,
     random_state: int = 42,
     window_test_size: int = 1,
+    mlflow_run_name: str = "study",
 ) -> tuple[optuna.Study, Pipeline]:
     drop_features = drop_features or []
 
@@ -166,74 +167,65 @@ def lgbm_optuna_search(
     )
 
     def objective(trial: optuna.trial.Trial) -> float:
-        with mlflow.start_run(
-            nested=True, run_name=f"trial_{trial.number}"
-        ) as child_run:
-            params = {
-                "max_depth": trial.suggest_int("max_depth", 3, 5),
-                "learning_rate": trial.suggest_float(
-                    "learning_rate", 1e-2, 0.3, log=True
-                ),
-                "n_estimators": trial.suggest_int("n_estimators", 100, 1000),
-                "subsample": trial.suggest_float("subsample", 0.5, 1.0),
-                "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
-                "min_child_samples": trial.suggest_int("min_child_samples", 10, 35),
-                "reg_alpha": trial.suggest_float("reg_alpha", 1e-4, 10.0, log=True),
-                "reg_lambda": trial.suggest_float("reg_lambda", 1e-4, 10.0, log=True),
+        params = {
+            # "max_depth": trial.suggest_int("max_depth", 3, 5),
+            "max_depth": -1,
+            "num_leaves": trial.suggest_int("num_leaves", 4, 128),
+            "learning_rate": trial.suggest_float(
+                "learning_rate", 1e-2, 0.3, log=True
+            ),
+            "n_estimators": trial.suggest_int("n_estimators", 100, 1000),
+            "subsample": trial.suggest_float("subsample", 0.5, 1),
+            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.7, 1),
+            "min_child_samples": trial.suggest_int("min_child_samples", 10, 35),
+            "reg_alpha": trial.suggest_float("reg_alpha", 1e-4, 10, log=True),
+            "reg_lambda": trial.suggest_float("reg_lambda", 1e-4, 10, log=True),
+        }
+        # max_depth = params["max_depth"]
+        # params["num_leaves"] = trial.suggest_int(
+        #     f"num_leaves_{max_depth}", 2**max_depth // 2, 2**max_depth
+        # )
+
+        pipeline = build_lgbm_pipeline(drop_features, random_state, features_top)
+        pipeline.set_params(**{f"model__{k}": v for k, v in params.items()})
+
+        if features_top:
+            fd_params = {
+                "feature_dropper__keep_count": trial.suggest_int(
+                    "keep_count", 10, 49
+                )
             }
-            max_depth = params["max_depth"]
-            params["num_leaves"] = trial.suggest_int(
-                "num_leaves", 2**max_depth // 2, 2**max_depth
-            )
+            pipeline.set_params(**fd_params)
 
-            pipeline = build_lgbm_pipeline(drop_features, random_state, features_top)
-            pipeline.set_params(**{f"model__{k}": v for k, v in params.items()})
+        cv_scores = cv_recursive_score(
+            pipeline,
+            X,
+            y,
+            cv=tscv,
+            scoring=scoring,
+            n_jobs=5
+        )
+        trial.set_user_attr("cv_scores", cv_scores.tolist())
 
-            if features_top:
-                fd_params = {
-                    "feature_dropper__keep_count": trial.suggest_int(
-                        "keep_count", 10, 49
-                    )
-                }
-                pipeline.set_params(**fd_params)
+        return _score_mean(cv_scores, scoring)
 
-            cv_scores = cv_recursive_score(
-                pipeline,
-                X,
-                y,
-                cv=tscv,
-                scoring=scoring,
-                n_jobs=8,
-            )
-            mean_rmsle = _score_mean(cv_scores, scoring)
-            mlflow.log_metrics({"mean_rmsle": mean_rmsle})
-            mlflow.sklearn.log_model(pipeline, name="model")
-            trial.set_user_attr("cv_scores", cv_scores.tolist())
-            trial.set_user_attr("run_id", child_run.info.run_id)
 
-            return _score_mean(cv_scores)
+    # sampler = TPESampler(seed=random_state)
+    # study = optuna.create_study(direction="minimize", sampler=sampler)
+    study = optuna.create_study(direction="minimize")
 
-    with mlflow.start_run(run_name="study"):
-        mlflow.log_param("n_trials", n_trials)
+    study.optimize(objective, n_trials=n_trials, timeout=timeout, n_jobs=n_jobs)
 
-        sampler = TPESampler(seed=random_state)
-        study = optuna.create_study(direction="minimize", sampler=sampler)
-        study.optimize(objective, n_trials=n_trials, timeout=timeout, n_jobs=n_jobs)
+    best_params = study.best_params.copy()
 
-        best_params = study.best_params.copy()
-        mlflow.log_params(best_params)
-        mlflow.log_metrics({"best_mean_rmsle": study.best_value})
-        if best_run_id := study.best_trial.user_attrs.get("run_id"):
-            mlflow.log_param("best_child_run_id", best_run_id)
+    best_pipeline = build_lgbm_pipeline(drop_features, random_state, features_top)
+    if "keep_count" in best_params:
+        best_pipeline.set_params(
+            **{"feature_dropper__keep_count": best_params.pop("keep_count")}
+        )
 
-        best_pipeline = build_lgbm_pipeline(drop_features, random_state, features_top)
-        if "keep_count" in best_params:
-            best_pipeline.set_params(
-                **{"feature_dropper__keep_count": best_params.pop("keep_count")}
-            )
-
-        best_pipeline.set_params(**{f"model__{k}": v for k, v in best_params.items()})
-        best_pipeline.fit(X, y)
+    best_pipeline.set_params(**{f"model__{k}": v for k, v in best_params.items()})
+    best_pipeline.fit(X, y)
 
     return study, best_pipeline
 

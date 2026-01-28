@@ -45,8 +45,10 @@ def _clean_merge_columns(df: pd.DataFrame, original_cols: set) -> pd.DataFrame:
         else:
             cols_to_rename[y_col] = base_col
 
-    df = df.drop(columns=cols_to_drop)
-    df = df.rename(columns=cols_to_rename)
+    if cols_to_drop:
+        df = df.drop(columns=cols_to_drop)
+    if cols_to_rename:
+        df = df.rename(columns=cols_to_rename)
 
     return df
 
@@ -85,7 +87,6 @@ def update_features_for_date(
     nbrs_lag_28 = lag_col(nbrs_col(VISITORS_COL), 28)
 
     df = add_lags(df, CITY_COL, VISITORS_NBR_COL, lags, True)
-    df = _clean_merge_columns(df, original_cols)
     df[lag_28] = df[lag_28].fillna(old_df[lag_28]).fillna(df[nbrs_lag_28])
     df[last_month] = df[last_month].fillna(old_df[last_month]).fillna(df[lag_28])
 
@@ -100,7 +101,6 @@ def update_features_for_date(
     df = add_basic_stats(df, RES_VISITORS_DIFF_COL, id_col, aggs)
     df = add_neighbors_stats(df, RES_VISITORS_DIFF_NBR_COL, CITY_COL, aggs, False)
 
-    df = _clean_merge_columns(df, original_cols)
     df_next_updated = df[df[VISIT_DATE_COL] == current_date]
 
     return df_next_updated
@@ -126,7 +126,6 @@ def recursive_predict(
     result = pd.Series(index=test_features.index, dtype=float)
 
     for date in tqdm(test_dates, desc="Predicting recursively"):
-        combined = combined.drop(columns=[VISITORS_NBR_COL])
         updated_features = update_features_for_date(
             combined,
             date,
@@ -156,55 +155,3 @@ def recursive_predict(
         result.loc[test_date_indices] = y_pred
 
     return result, combined
-
-
-# def recursive_predict(
-#     model: Pipeline,
-#     test_features: pd.DataFrame,
-#     train_features: pd.DataFrame,
-#     train_labels: pd.Series,
-#     drop_cols: list,
-# ) -> tuple[pd.Series, pd.DataFrame]:
-#     id_col = AIR_RESTAURANT_ID_COL
-#     feature_exclude = {id_col, VISIT_DATE_COL, VISITORS_COL, *drop_cols}
-#
-#     combined = pd.concat(
-#         [train_features.copy(), test_features.copy()], ignore_index=True
-#     )
-#     combined[VISITORS_COL] = 0
-#     combined.loc[: len(train_features) - 1, VISITORS_COL] = train_labels.values
-#
-#     test_dates = sorted(test_features[VISIT_DATE_COL].unique())
-#     result = pd.Series(index=test_features.index, dtype=float)
-#
-#     for date in tqdm(test_dates, desc="Predicting recursively"):
-#         combined = combined.drop(columns=[VISITORS_NBR_COL])
-#         updated_features = update_features_for_date(
-#             combined,
-#             date,
-#         )
-#
-#         missing_cols = updated_features.columns.difference(combined.columns)
-#         if not missing_cols.empty:
-#             combined[missing_cols] = np.nan
-#
-#         date_mask = combined[VISIT_DATE_COL] == date
-#         current_features = combined[date_mask]
-#
-#         cols_to_update = updated_features.columns.difference([VISITORS_COL])
-#         combined.loc[current_features.index, cols_to_update] = updated_features[
-#             cols_to_update
-#         ].values
-#
-#         X_current = current_features.drop(columns=feature_exclude)
-#         y_pred = model.predict(X_current).astype("int64")
-#         y_pred = np.maximum(y_pred, 0)
-#
-#         combined.loc[current_features.index, VISITORS_COL] = y_pred
-#
-#         test_date_mask = test_features[VISIT_DATE_COL] == date
-#         test_date_df = test_features[test_date_mask]
-#         test_date_indices = test_date_df.index
-#         result.loc[test_date_indices] = y_pred
-#
-#     return result, combined
