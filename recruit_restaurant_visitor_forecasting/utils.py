@@ -139,7 +139,7 @@ def optuna_cv_results_to_df(study: optuna.Study) -> pd.DataFrame:
             "mean_test_score": t.value,
         }
         for i, s in enumerate(scores):
-            rec[f"split_test_{i}"] = -s
+            rec[f"split_test_{i}"] = s
         records.append(rec)
 
     df = pd.DataFrame(records)

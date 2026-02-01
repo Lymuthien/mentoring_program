@@ -170,16 +170,16 @@ def lgbm_optuna_search(
         params = {
             # "max_depth": trial.suggest_int("max_depth", 3, 5),
             "max_depth": -1,
-            "num_leaves": trial.suggest_int("num_leaves", 4, 128),
+            "num_leaves": trial.suggest_int("model__num_leaves", 4, 128),
             "learning_rate": trial.suggest_float(
-                "learning_rate", 1e-2, 0.3, log=True
+                "model__learning_rate", 1e-2, 0.3, log=True
             ),
-            "n_estimators": trial.suggest_int("n_estimators", 100, 1000),
-            "subsample": trial.suggest_float("subsample", 0.5, 1),
-            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.7, 1),
-            "min_child_samples": trial.suggest_int("min_child_samples", 10, 35),
-            "reg_alpha": trial.suggest_float("reg_alpha", 1e-4, 10, log=True),
-            "reg_lambda": trial.suggest_float("reg_lambda", 1e-4, 10, log=True),
+            "n_estimators": trial.suggest_int("model__n_estimators", 100, 1000),
+            "subsample": trial.suggest_float("model__subsample", 0.5, 1),
+            "colsample_bytree": trial.suggest_float("model__colsample_bytree", 0.7, 1),
+            "min_child_samples": trial.suggest_int("model__min_child_samples", 10, 35),
+            "reg_alpha": trial.suggest_float("model__reg_alpha", 1e-4, 10, log=True),
+            "reg_lambda": trial.suggest_float("model__reg_lambda", 1e-4, 10, log=True),
         }
         # max_depth = params["max_depth"]
         # params["num_leaves"] = trial.suggest_int(
@@ -190,41 +190,24 @@ def lgbm_optuna_search(
         pipeline.set_params(**{f"model__{k}": v for k, v in params.items()})
 
         if features_top:
-            fd_params = {
-                "feature_dropper__keep_count": trial.suggest_int(
-                    "keep_count", 10, 49
-                )
-            }
+            kc = trial.suggest_int("feature_dropper__keep_count", 10, 49)
+            fd_params = {"feature_dropper__keep_count": kc}
             pipeline.set_params(**fd_params)
 
         cv_scores = cv_recursive_score(
-            pipeline,
-            X,
-            y,
-            cv=tscv,
-            scoring=scoring,
-            n_jobs=5
+            pipeline, X, y, cv=tscv, scoring=scoring, n_jobs=5
         )
         trial.set_user_attr("cv_scores", cv_scores.tolist())
 
         return _score_mean(cv_scores, scoring)
 
-
-    # sampler = TPESampler(seed=random_state)
-    # study = optuna.create_study(direction="minimize", sampler=sampler)
+    sampler = TPESampler(seed=random_state)
+    study = optuna.create_study(direction="minimize", sampler=sampler)
     study = optuna.create_study(direction="minimize")
-
     study.optimize(objective, n_trials=n_trials, timeout=timeout, n_jobs=n_jobs)
 
-    best_params = study.best_params.copy()
-
     best_pipeline = build_lgbm_pipeline(drop_features, random_state, features_top)
-    if "keep_count" in best_params:
-        best_pipeline.set_params(
-            **{"feature_dropper__keep_count": best_params.pop("keep_count")}
-        )
-
-    best_pipeline.set_params(**{f"model__{k}": v for k, v in best_params.items()})
+    best_pipeline.set_params(**study.best_params)
     best_pipeline.fit(X, y)
 
     return study, best_pipeline
