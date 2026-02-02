@@ -15,6 +15,9 @@ from recruit_restaurant_visitor_forecasting.config import (
     VISITORS_DIFF_COL,
     ACTUAL_MEAN,
     PRED_MEAN,
+    AIR_RESTAURANT_ID_COL,
+    CITY_COL,
+    AIR_GENRE_COL,
 )
 
 
@@ -309,3 +312,89 @@ def plot_daily_pred(daily: pd.DataFrame, axs, train: bool = True):
         axs.set_title("Test Set: Average visitors per day")
     axs.legend()
     axs.grid(True, alpha=0.3)
+
+
+def _calc_errors(
+    features: pd.DataFrame,
+    y_test: pd.Series,
+    y_pred: pd.Series,
+) -> pd.DataFrame:
+    error_df = features[[VISIT_DATE_COL, AIR_RESTAURANT_ID_COL]].copy()
+    if CITY_COL in features.columns:
+        error_df[CITY_COL] = features[CITY_COL]
+    if AIR_GENRE_COL in features.columns:
+        error_df[AIR_GENRE_COL] = features[AIR_GENRE_COL]
+
+    error_df["error"] = (y_pred - y_test).abs()
+
+    return error_df
+
+
+def _calc_daily_errors(error_df: pd.DataFrame) -> pd.DataFrame:
+    daily_errors = error_df.groupby(VISIT_DATE_COL)["error"].mean().reset_index()
+    daily_errors.columns = [VISIT_DATE_COL, "mean_error"]
+    return daily_errors.sort_values(VISIT_DATE_COL)
+
+
+def _calc_daily_errors_by_group(error_df: pd.DataFrame, group_col: str) -> pd.DataFrame:
+    daily_errors = (
+        error_df.groupby([VISIT_DATE_COL, group_col])["error"].mean().reset_index()
+    )
+    daily_errors.columns = [VISIT_DATE_COL, group_col, "mean_error"]
+    return daily_errors.sort_values([group_col, VISIT_DATE_COL])
+
+
+@show_figure(figsize=(12, 6))
+def plot_daily_error_overall(
+    features: pd.DataFrame,
+    y_test: pd.Series,
+    y_pred: pd.Series,
+) -> None:
+    error_df = _calc_errors(features, y_test, y_pred)
+    daily_errors = _calc_daily_errors(error_df)
+
+    plt.plot(
+        daily_errors[VISIT_DATE_COL],
+        daily_errors["mean_error"],
+        linewidth=2,
+        alpha=0.7,
+    )
+    plt.xlabel("Date")
+    plt.ylabel("Average error")
+    plt.title("Average prediction error per day (all restaurants)")
+    plt.grid(True, alpha=0.3)
+
+
+def plot_daily_error_by_group(
+    features: pd.DataFrame,
+    y_test: pd.Series,
+    y_pred: pd.Series,
+    group_col: str,
+    n_cols: int = 3,
+) -> None:
+    error_df = _calc_errors(features, y_test, y_pred)
+    daily_errors = _calc_daily_errors_by_group(error_df, group_col)
+
+    groups = daily_errors[group_col].unique()
+    n_groups = len(groups)
+
+    n_rows = int(np.ceil(n_groups / n_cols))
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 5, n_rows * 5))
+    axes = axes.flatten()
+
+    for idx, group in enumerate(groups):
+        group_data = daily_errors[daily_errors[group_col] == group]
+        axes[idx].plot(
+            group_data[VISIT_DATE_COL],
+            group_data["mean_error"],
+            linewidth=1.5,
+            alpha=0.7,
+        )
+        axes[idx].set_xlabel("Date")
+        axes[idx].set_ylabel("Average error")
+        axes[idx].set_title(f"Average error per day: {group}", fontsize=10)
+        axes[idx].tick_params(axis="x", labelrotation=45)
+        axes[idx].grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.show()
