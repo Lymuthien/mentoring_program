@@ -168,9 +168,7 @@ def lgbm_optuna_search(
 
     def objective(trial: optuna.trial.Trial) -> float:
         params = {
-            # "max_depth": trial.suggest_int("max_depth", 3, 5),
-            "max_depth": -1,
-            "num_leaves": trial.suggest_int("model__num_leaves", 4, 128),
+            "max_depth": trial.suggest_int("model__max_depth", 3, 5),
             "learning_rate": trial.suggest_float(
                 "model__learning_rate", 1e-2, 0.3, log=True
             ),
@@ -181,10 +179,10 @@ def lgbm_optuna_search(
             "reg_alpha": trial.suggest_float("model__reg_alpha", 1e-4, 10, log=True),
             "reg_lambda": trial.suggest_float("model__reg_lambda", 1e-4, 10, log=True),
         }
-        # max_depth = params["max_depth"]
-        # params["num_leaves"] = trial.suggest_int(
-        #     f"num_leaves_{max_depth}", 2**max_depth // 2, 2**max_depth
-        # )
+        max_depth = params["max_depth"]
+        params["num_leaves"] = trial.suggest_int(
+            f"model__num_leaves", 2**max_depth // 2, 2**max_depth
+        )
 
         pipeline = build_lgbm_pipeline(drop_features, random_state, features_top)
         pipeline.set_params(**{f"model__{k}": v for k, v in params.items()})
@@ -203,7 +201,6 @@ def lgbm_optuna_search(
 
     sampler = TPESampler(seed=random_state)
     study = optuna.create_study(direction="minimize", sampler=sampler)
-    study = optuna.create_study(direction="minimize")
     study.optimize(objective, n_trials=n_trials, timeout=timeout, n_jobs=n_jobs)
 
     best_pipeline = build_lgbm_pipeline(drop_features, random_state, features_top)

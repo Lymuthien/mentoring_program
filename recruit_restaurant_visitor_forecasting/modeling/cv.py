@@ -60,10 +60,10 @@ class ExpandingWindowSplit:
 
 def _run_one_fold(
     model,
-    X,
-    y,
-    train_idx,
-    val_idx,
+    X: pd.DataFrame,
+    y: pd.Series,
+    train_idx: np.ndarray,
+    val_idx: np.ndarray,
     scoring,
 ):
     X_train = X.iloc[train_idx]

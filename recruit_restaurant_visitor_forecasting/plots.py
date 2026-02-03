@@ -4,6 +4,9 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.gridspec import GridSpec
+from statsmodels.graphics.tsaplots import plot_acf as plot_acf_
+
 from recruit_restaurant_visitor_forecasting.config import (
     DAY_OF_WEEK_COL,
     DAY_STR_COL,
@@ -344,7 +347,41 @@ def _calc_daily_errors_by_group(error_df: pd.DataFrame, group_col: str) -> pd.Da
     return daily_errors.sort_values([group_col, VISIT_DATE_COL])
 
 
-@show_figure(figsize=(12, 6))
+def _plot_error(axes, df: pd.DataFrame, group: str):
+    axes.plot(
+        df[VISIT_DATE_COL],
+        df["mean_error"],
+        linewidth=1.5,
+        alpha=0.7,
+    )
+    axes.set_xlabel("Date")
+    axes.set_ylabel("Average error")
+    axes.set_title(f"Average prediction error per day: {group}")
+    axes.grid(True, alpha=0.3)
+
+
+def _hist_error(axes, df: pd.DataFrame, group: str):
+    axes.hist(
+        df["mean_error"],
+        alpha=0.7,
+    )
+    axes.set_title(f"Error distribution: {group}")
+    axes.set_xlabel("Error")
+    axes.set_ylabel("Count of days with this mean error")
+    axes.grid(True, alpha=0.3)
+
+
+def _plot_error_acf(axes, df: pd.DataFrame, group: str):
+    plot_acf_(
+        df["mean_error"],
+        lags=30,
+        ax=axes,
+        zero=False,
+    )
+    axes.set_title(f"ACF of daily mean error: {group}")
+    axes.grid(True, alpha=0.3)
+
+
 def plot_daily_error_overall(
     features: pd.DataFrame,
     y_test: pd.Series,
@@ -352,17 +389,22 @@ def plot_daily_error_overall(
 ) -> None:
     error_df = _calc_errors(features, y_test, y_pred)
     daily_errors = _calc_daily_errors(error_df)
+    group = "all restaurants"
 
-    plt.plot(
-        daily_errors[VISIT_DATE_COL],
-        daily_errors["mean_error"],
-        linewidth=2,
-        alpha=0.7,
-    )
-    plt.xlabel("Date")
-    plt.ylabel("Average error")
-    plt.title("Average prediction error per day (all restaurants)")
-    plt.grid(True, alpha=0.3)
+    fig = plt.figure(figsize=(14, 8))
+    gs = GridSpec(nrows=2, ncols=4, figure=fig)
+
+    ax_ts = fig.add_subplot(gs[0, :])
+    _plot_error(ax_ts, daily_errors, group)
+
+    ax_hist = fig.add_subplot(gs[1, :2])
+    _hist_error(ax_hist, daily_errors, group)
+
+    ax_acf = fig.add_subplot(gs[1, 2:])
+    _plot_error_acf(ax_acf, daily_errors, group)
+
+    plt.tight_layout()
+    plt.show()
 
 
 def plot_daily_error_by_group(
@@ -370,31 +412,30 @@ def plot_daily_error_by_group(
     y_test: pd.Series,
     y_pred: pd.Series,
     group_col: str,
-    n_cols: int = 3,
 ) -> None:
     error_df = _calc_errors(features, y_test, y_pred)
     daily_errors = _calc_daily_errors_by_group(error_df, group_col)
+    n_cols = 3
 
     groups = daily_errors[group_col].unique()
     n_groups = len(groups)
 
-    n_rows = int(np.ceil(n_groups / n_cols))
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 5, n_rows * 5))
+    fig, axes = plt.subplots(n_groups, n_cols, figsize=(n_cols * 5, n_groups * 5))
     axes = axes.flatten()
 
     for idx, group in enumerate(groups):
+        group_str = str(group)
         group_data = daily_errors[daily_errors[group_col] == group]
-        axes[idx].plot(
-            group_data[VISIT_DATE_COL],
-            group_data["mean_error"],
-            linewidth=1.5,
-            alpha=0.7,
-        )
-        axes[idx].set_xlabel("Date")
-        axes[idx].set_ylabel("Average error")
-        axes[idx].set_title(f"Average error per day: {group}", fontsize=10)
-        axes[idx].tick_params(axis="x", labelrotation=45)
-        axes[idx].grid(True, alpha=0.3)
+
+        ax_ts = axes[3 * idx]
+        _plot_error(ax_ts, group_data, group_str)
+        ax_ts.tick_params(axis="x", labelrotation=45)
+
+        ax_hist = axes[3 * idx + 1]
+        _hist_error(ax_hist, group_data, group_str)
+
+        ax_acf = axes[3 * idx + 2]
+        _plot_error_acf(ax_acf, group_data, group_str)
 
     plt.tight_layout()
     plt.show()
