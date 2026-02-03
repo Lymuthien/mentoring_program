@@ -427,14 +427,14 @@ def plot_daily_error_by_group(
         group_str = str(group)
         group_data = daily_errors[daily_errors[group_col] == group]
 
-        ax_ts = axes[3 * idx]
+        ax_ts = axes[n_cols * idx]
         _plot_error(ax_ts, group_data, group_str)
         ax_ts.tick_params(axis="x", labelrotation=45)
 
-        ax_hist = axes[3 * idx + 1]
+        ax_hist = axes[n_cols * idx + 1]
         _hist_error(ax_hist, group_data, group_str)
 
-        ax_acf = axes[3 * idx + 2]
+        ax_acf = axes[n_cols * idx + 2]
         _plot_error_acf(ax_acf, group_data, group_str)
 
     plt.tight_layout()
