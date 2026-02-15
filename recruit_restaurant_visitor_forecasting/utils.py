@@ -14,6 +14,8 @@ from recruit_restaurant_visitor_forecasting.config import (
     PRED_MEAN,
     VISITORS_COL,
     AIR_RESTAURANT_ID_COL,
+    CITY_COL,
+    AIR_GENRE_COL,
 )
 from recruit_restaurant_visitor_forecasting.features import add_sum_of_reserves
 
@@ -163,3 +165,68 @@ def build_feature_drop_list(
 def rmsle(y_true, y_pred) -> float:
     y_pred = np.maximum(y_pred, 0)
     return np.sqrt(mean_squared_log_error(y_true, y_pred))
+
+def calc_errors(
+    features: pd.DataFrame,
+    y_test: pd.Series,
+    y_pred: pd.Series,
+) -> pd.DataFrame:
+    error_df = features[[VISIT_DATE_COL, AIR_RESTAURANT_ID_COL]].copy()
+    if CITY_COL in features.columns:
+        error_df[CITY_COL] = features[CITY_COL]
+    if AIR_GENRE_COL in features.columns:
+        error_df[AIR_GENRE_COL] = features[AIR_GENRE_COL]
+
+    error_df["error"] = y_pred - y_test
+
+    return error_df
+
+
+def calc_daily_errors(error_df: pd.DataFrame) -> pd.DataFrame:
+    daily_errors = error_df.groupby(VISIT_DATE_COL)["error"].mean().reset_index()
+    daily_errors.columns = [VISIT_DATE_COL, "mean_error"]
+    return daily_errors.sort_values(VISIT_DATE_COL)
+
+
+def calc_daily_errors_by_group(error_df: pd.DataFrame, group_col: str) -> pd.DataFrame:
+    daily_errors = (
+        error_df.groupby([VISIT_DATE_COL, group_col])["error"].mean().reset_index()
+    )
+    daily_errors.columns = [VISIT_DATE_COL, group_col, "mean_error"]
+    return daily_errors.sort_values([group_col, VISIT_DATE_COL])
+
+
+def get_daily_error_stats_table(
+    features: pd.DataFrame,
+    y_test: pd.Series,
+    y_pred: pd.Series,
+    group_col: str,
+    acf_lags: int = 14,
+) -> pd.DataFrame:
+    error_df = calc_errors(features, y_test, y_pred)
+    daily_errors = calc_daily_errors_by_group(error_df, group_col)
+    groups = daily_errors[group_col].unique()
+
+    rows: list[dict] = []
+    for group in groups:
+        group_str = str(group)
+        group_data = daily_errors[daily_errors[group_col] == group].copy()
+        series = group_data["mean_error"].reset_index(drop=True)
+
+        row = {
+            f"{group_col}": group_str,
+            "mean_error": series.mean(),
+            "std_error": series.std(),
+            "min_abs_error": series.abs().min(),
+            "max_pos_error": series.max(),
+            "max_neg_error": series.min(),
+        }
+
+        for lag in range(1, acf_lags + 1):
+            acf_val = series.autocorr(lag=lag)
+            row[f"acf_{lag}"] = acf_val
+
+        rows.append(row)
+
+    group_table = pd.DataFrame(rows)
+    return group_table

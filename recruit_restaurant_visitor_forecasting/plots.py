@@ -18,11 +18,12 @@ from recruit_restaurant_visitor_forecasting.config import (
     VISITORS_DIFF_COL,
     ACTUAL_MEAN,
     PRED_MEAN,
-    AIR_RESTAURANT_ID_COL,
-    CITY_COL,
-    AIR_GENRE_COL,
 )
-
+from recruit_restaurant_visitor_forecasting.utils import (
+    calc_errors,
+    calc_daily_errors_by_group,
+    calc_daily_errors,
+)
 
 MONTH_COLORS = np.random.choice(list(mpl.colors.XKCD_COLORS.keys()), 12, replace=False)
 
@@ -317,36 +318,6 @@ def plot_daily_pred(daily: pd.DataFrame, axs, train: bool = True):
     axs.grid(True, alpha=0.3)
 
 
-def _calc_errors(
-    features: pd.DataFrame,
-    y_test: pd.Series,
-    y_pred: pd.Series,
-) -> pd.DataFrame:
-    error_df = features[[VISIT_DATE_COL, AIR_RESTAURANT_ID_COL]].copy()
-    if CITY_COL in features.columns:
-        error_df[CITY_COL] = features[CITY_COL]
-    if AIR_GENRE_COL in features.columns:
-        error_df[AIR_GENRE_COL] = features[AIR_GENRE_COL]
-
-    error_df["error"] = (y_pred - y_test).abs()
-
-    return error_df
-
-
-def _calc_daily_errors(error_df: pd.DataFrame) -> pd.DataFrame:
-    daily_errors = error_df.groupby(VISIT_DATE_COL)["error"].mean().reset_index()
-    daily_errors.columns = [VISIT_DATE_COL, "mean_error"]
-    return daily_errors.sort_values(VISIT_DATE_COL)
-
-
-def _calc_daily_errors_by_group(error_df: pd.DataFrame, group_col: str) -> pd.DataFrame:
-    daily_errors = (
-        error_df.groupby([VISIT_DATE_COL, group_col])["error"].mean().reset_index()
-    )
-    daily_errors.columns = [VISIT_DATE_COL, group_col, "mean_error"]
-    return daily_errors.sort_values([group_col, VISIT_DATE_COL])
-
-
 def _plot_error(axes, df: pd.DataFrame, group: str):
     axes.plot(
         df[VISIT_DATE_COL],
@@ -387,8 +358,8 @@ def plot_daily_error_overall(
     y_test: pd.Series,
     y_pred: pd.Series,
 ) -> None:
-    error_df = _calc_errors(features, y_test, y_pred)
-    daily_errors = _calc_daily_errors(error_df)
+    error_df = calc_errors(features, y_test, y_pred)
+    daily_errors = calc_daily_errors(error_df)
     group = "all restaurants"
 
     fig = plt.figure(figsize=(14, 8))
@@ -413,8 +384,8 @@ def plot_daily_error_by_group(
     y_pred: pd.Series,
     group_col: str,
 ) -> None:
-    error_df = _calc_errors(features, y_test, y_pred)
-    daily_errors = _calc_daily_errors_by_group(error_df, group_col)
+    error_df = calc_errors(features, y_test, y_pred)
+    daily_errors = calc_daily_errors_by_group(error_df, group_col)
     n_cols = 3
 
     groups = daily_errors[group_col].unique()
