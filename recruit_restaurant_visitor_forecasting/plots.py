@@ -23,6 +23,7 @@ from recruit_restaurant_visitor_forecasting.utils import (
     calc_errors,
     calc_daily_errors_by_group,
     calc_daily_errors,
+    calc_daily_mean_by_group,
 )
 
 MONTH_COLORS = np.random.choice(list(mpl.colors.XKCD_COLORS.keys()), 12, replace=False)
@@ -292,32 +293,6 @@ def plot_feature_importances(model, columns):
     plt.tight_layout()
 
 
-def plot_daily_pred(daily: pd.DataFrame, axs, train: bool = True):
-    axs.plot(
-        daily[VISIT_DATE_COL],
-        daily[ACTUAL_MEAN],
-        label="Actual",
-        linewidth=2,
-        alpha=0.7,
-    )
-    axs.plot(
-        daily[VISIT_DATE_COL],
-        daily[PRED_MEAN],
-        label="Predicted",
-        linewidth=2,
-        alpha=0.7,
-        linestyle="--",
-    )
-    axs.set_xlabel("Date")
-    axs.set_ylabel("Average visitors")
-    if train:
-        axs.set_title("Train Set: Average visitors per day")
-    else:
-        axs.set_title("Test Set: Average visitors per day")
-    axs.legend()
-    axs.grid(True, alpha=0.3)
-
-
 def _plot_error(axes, df: pd.DataFrame, group: str):
     axes.plot(
         df[VISIT_DATE_COL],
@@ -350,6 +325,29 @@ def _plot_error_acf(axes, df: pd.DataFrame, group: str):
         zero=False,
     )
     axes.set_title(f"ACF of daily mean error: {group}")
+    axes.grid(True, alpha=0.3)
+
+
+def plot_actual_pred(axes, df: pd.DataFrame, group: str):
+    axes.plot(
+        df[VISIT_DATE_COL],
+        df[ACTUAL_MEAN],
+        label="Actual",
+        linewidth=2,
+        alpha=0.7,
+    )
+    axes.plot(
+        df[VISIT_DATE_COL],
+        df[PRED_MEAN],
+        label="Predicted",
+        linewidth=2,
+        alpha=0.7,
+        linestyle="--",
+    )
+    axes.set_xlabel("Date")
+    axes.set_ylabel("Average visitors")
+    axes.set_title(f"{group}: Average visitors per day")
+    axes.legend()
     axes.grid(True, alpha=0.3)
 
 
@@ -386,7 +384,8 @@ def plot_daily_error_by_group(
 ) -> None:
     error_df = calc_errors(features, y_test, y_pred)
     daily_errors = calc_daily_errors_by_group(error_df, group_col)
-    n_cols = 3
+    daily_means = calc_daily_mean_by_group(error_df, group_col)
+    n_cols = 4
 
     groups = daily_errors[group_col].unique()
     n_groups = len(groups)
@@ -397,6 +396,7 @@ def plot_daily_error_by_group(
     for idx, group in enumerate(groups):
         group_str = str(group)
         group_data = daily_errors[daily_errors[group_col] == group]
+        group_mean = daily_means[daily_means[group_col] == group]
 
         ax_ts = axes[n_cols * idx]
         _plot_error(ax_ts, group_data, group_str)
@@ -407,6 +407,9 @@ def plot_daily_error_by_group(
 
         ax_acf = axes[n_cols * idx + 2]
         _plot_error_acf(ax_acf, group_data, group_str)
+
+        ax_dm = axes[n_cols * idx + 3]
+        plot_actual_pred(ax_dm, group_mean, group_str)
 
     plt.tight_layout()
     plt.show()

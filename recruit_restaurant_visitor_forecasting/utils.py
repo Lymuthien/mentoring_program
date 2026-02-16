@@ -87,29 +87,18 @@ def get_first_dates(df: pd.DataFrame, id_col: str) -> pd.Series:
     return first_dates
 
 
-def get_daily_means(
-    dates: pd.DataFrame, values: pd.Series | np.ndarray
-) -> pd.DataFrame:
-    daily_actual = (
-        pd.DataFrame(
-            {
-                "date": dates.values,
-                "actual": values.values if isinstance(values, pd.Series) else values,
-            }
-        )
-        .groupby("date")["actual"]
-        .mean()
-        .reset_index()
-    )
+def _get_daily_means(dates: pd.DataFrame, values: pd.Series) -> pd.DataFrame:
+    data = pd.DataFrame({"date": dates.values, "actual": values.values})
+    daily_actual = data.groupby("date")["actual"].mean().reset_index()
     return daily_actual
 
 
 def merge_daily_pred(
     dates: pd.DataFrame, y: pd.Series, y_pred: pd.Series
 ) -> pd.DataFrame:
-    daily_actual = get_daily_means(dates, y)
+    daily_actual = _get_daily_means(dates, y)
     daily_actual.columns = [VISIT_DATE_COL, ACTUAL_MEAN]
-    daily_pred = get_daily_means(dates, y_pred)
+    daily_pred = _get_daily_means(dates, y_pred)
     daily_pred.columns = [VISIT_DATE_COL, PRED_MEAN]
     daily = daily_actual.merge(daily_pred, on=VISIT_DATE_COL)
     daily = daily.sort_values(VISIT_DATE_COL)
@@ -147,9 +136,9 @@ def optuna_cv_results_to_df(study: optuna.Study) -> pd.DataFrame:
     df = pd.DataFrame(records)
 
     ascending = study.direction == optuna.study.StudyDirection.MINIMIZE
-    df["rank_test_score"] = df["mean_test_score"].rank(
-        method="min", ascending=ascending
-    ).astype(int)
+    df["rank_test_score"] = (
+        df["mean_test_score"].rank(method="min", ascending=ascending).astype(int)
+    )
 
     return df
 
@@ -166,6 +155,7 @@ def rmsle(y_true, y_pred) -> float:
     y_pred = np.maximum(y_pred, 0)
     return np.sqrt(mean_squared_log_error(y_true, y_pred))
 
+
 def calc_errors(
     features: pd.DataFrame,
     y_test: pd.Series,
@@ -178,22 +168,33 @@ def calc_errors(
         error_df[AIR_GENRE_COL] = features[AIR_GENRE_COL]
 
     error_df["error"] = y_pred - y_test
+    error_df[PRED_MEAN] = y_pred.values
+    error_df[ACTUAL_MEAN] = y_test.values
 
     return error_df
 
 
-def calc_daily_errors(error_df: pd.DataFrame) -> pd.DataFrame:
-    daily_errors = error_df.groupby(VISIT_DATE_COL)["error"].mean().reset_index()
+def calc_daily_errors(df: pd.DataFrame) -> pd.DataFrame:
+    daily_errors = df.groupby(VISIT_DATE_COL)["error"].mean().reset_index()
     daily_errors.columns = [VISIT_DATE_COL, "mean_error"]
     return daily_errors.sort_values(VISIT_DATE_COL)
 
 
-def calc_daily_errors_by_group(error_df: pd.DataFrame, group_col: str) -> pd.DataFrame:
-    daily_errors = (
-        error_df.groupby([VISIT_DATE_COL, group_col])["error"].mean().reset_index()
-    )
+def calc_daily_errors_by_group(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
+    daily_errors = df.groupby([VISIT_DATE_COL, group_col])["error"].mean().reset_index()
     daily_errors.columns = [VISIT_DATE_COL, group_col, "mean_error"]
     return daily_errors.sort_values([group_col, VISIT_DATE_COL])
+
+
+def calc_daily_mean_by_group(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
+    daily = df.groupby([VISIT_DATE_COL, group_col])
+    daily_act_means = daily[ACTUAL_MEAN].mean().reset_index()
+    daily_pred_means = daily[PRED_MEAN].mean().reset_index()
+    daily_combined = daily_act_means.merge(
+        daily_pred_means,
+        on=[VISIT_DATE_COL, group_col],
+    )
+    return daily_combined
 
 
 def get_daily_error_stats_table(
