@@ -39,11 +39,17 @@ def build_lgbm_pipeline(
     random_state: int,
     top_features: list[str] = None,
     f_count: int = None,
+    objective: str = "regression",
 ) -> Pipeline:
     return Pipeline(
         [
             ("feature_dropper", FeatureDropper(drop_features, top_features, f_count)),
-            ("model", LGBMRegressor(random_state=random_state, verbose=-1)),
+            (
+                "model",
+                LGBMRegressor(
+                    random_state=random_state, verbose=-1, objective=objective
+                ),
+            ),
         ]
     )
 

@@ -1,4 +1,3 @@
-import mlflow
 import numpy as np
 import optuna
 import pandas as pd
@@ -18,6 +17,13 @@ from recruit_restaurant_visitor_forecasting.config import (
     AIR_GENRE_COL,
 )
 from recruit_restaurant_visitor_forecasting.features import add_sum_of_reserves
+
+MEAN_ERROR = "mean_error"
+STD_ERROR = "std_error"
+MIN_ABS_ERROR = "min_abs_error"
+MAX_POS_ERROR = "max_pos_error"
+MAX_NEG_ERROR = "max_neg_error"
+ERROR_COL = "error"
 
 
 def get_dfs_daily_corr(
@@ -144,8 +150,7 @@ def optuna_cv_results_to_df(study: optuna.Study) -> pd.DataFrame:
 
 
 def build_feature_drop_list(
-    all_columns: list[str],
-    selected_features: list[str],
+    all_columns: list[str], selected_features: list[str]
 ) -> list[str]:
     drop_set = set(all_columns) - set(selected_features)
     return list(drop_set)
@@ -157,9 +162,7 @@ def rmsle(y_true, y_pred) -> float:
 
 
 def calc_errors(
-    features: pd.DataFrame,
-    y_test: pd.Series,
-    y_pred: pd.Series,
+    features: pd.DataFrame, y_test: pd.Series, y_pred: pd.Series
 ) -> pd.DataFrame:
     error_df = features[[VISIT_DATE_COL, AIR_RESTAURANT_ID_COL]].copy()
     if CITY_COL in features.columns:
@@ -167,7 +170,7 @@ def calc_errors(
     if AIR_GENRE_COL in features.columns:
         error_df[AIR_GENRE_COL] = features[AIR_GENRE_COL]
 
-    error_df["error"] = y_pred - y_test
+    error_df[ERROR_COL] = y_pred - y_test
     error_df[PRED_MEAN] = y_pred.values
     error_df[ACTUAL_MEAN] = y_test.values
 
@@ -175,14 +178,16 @@ def calc_errors(
 
 
 def calc_daily_errors(df: pd.DataFrame) -> pd.DataFrame:
-    daily_errors = df.groupby(VISIT_DATE_COL)["error"].mean().reset_index()
-    daily_errors.columns = [VISIT_DATE_COL, "mean_error"]
+    daily_errors = df.groupby(VISIT_DATE_COL)[ERROR_COL].mean().reset_index()
+    daily_errors.columns = [VISIT_DATE_COL, MEAN_ERROR]
     return daily_errors.sort_values(VISIT_DATE_COL)
 
 
 def calc_daily_errors_by_group(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
-    daily_errors = df.groupby([VISIT_DATE_COL, group_col])["error"].mean().reset_index()
-    daily_errors.columns = [VISIT_DATE_COL, group_col, "mean_error"]
+    daily_errors = (
+        df.groupby([VISIT_DATE_COL, group_col])[ERROR_COL].mean().reset_index()
+    )
+    daily_errors.columns = [VISIT_DATE_COL, group_col, MEAN_ERROR]
     return daily_errors.sort_values([group_col, VISIT_DATE_COL])
 
 
@@ -191,8 +196,7 @@ def calc_daily_mean_by_group(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
     daily_act_means = daily[ACTUAL_MEAN].mean().reset_index()
     daily_pred_means = daily[PRED_MEAN].mean().reset_index()
     daily_combined = daily_act_means.merge(
-        daily_pred_means,
-        on=[VISIT_DATE_COL, group_col],
+        daily_pred_means, on=[VISIT_DATE_COL, group_col]
     )
     return daily_combined
 
@@ -212,20 +216,20 @@ def get_daily_error_stats_table(
     for group in groups:
         group_str = str(group)
         group_data = daily_errors[daily_errors[group_col] == group].copy()
-        series = group_data["mean_error"].reset_index(drop=True)
+        series = group_data[MEAN_ERROR].reset_index(drop=True)
 
         row = {
             f"{group_col}": group_str,
-            "mean_error": series.mean(),
-            "std_error": series.std(),
-            "min_abs_error": series.abs().min(),
-            "max_pos_error": series.max(),
-            "max_neg_error": series.min(),
+            MEAN_ERROR: round(series.mean(), 3),
+            STD_ERROR: round(series.std(), 3),
+            MIN_ABS_ERROR: round(series.abs().min(), 3),
+            MAX_POS_ERROR: round(series.max(), 3),
+            MAX_NEG_ERROR: round(np.abs(series.min()), 3),
         }
 
         for lag in range(1, acf_lags + 1):
             acf_val = series.autocorr(lag=lag)
-            row[f"acf_{lag}"] = acf_val
+            row[f"acf_{lag}"] = round(acf_val, 3)
 
         rows.append(row)
 

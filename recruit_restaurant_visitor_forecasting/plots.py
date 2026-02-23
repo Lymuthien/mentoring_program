@@ -1,5 +1,6 @@
 from functools import wraps
 
+import seaborn as sns
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
@@ -24,6 +25,8 @@ from recruit_restaurant_visitor_forecasting.utils import (
     calc_daily_errors_by_group,
     calc_daily_errors,
     calc_daily_mean_by_group,
+    MEAN_ERROR,
+    STD_ERROR,
 )
 
 MONTH_COLORS = np.random.choice(list(mpl.colors.XKCD_COLORS.keys()), 12, replace=False)
@@ -294,12 +297,7 @@ def plot_feature_importances(model, columns):
 
 
 def _plot_error(axes, df: pd.DataFrame, group: str):
-    axes.plot(
-        df[VISIT_DATE_COL],
-        df["mean_error"],
-        linewidth=1.5,
-        alpha=0.7,
-    )
+    axes.plot(df[VISIT_DATE_COL], df[MEAN_ERROR], linewidth=1.5, alpha=0.7)
     axes.set_xlabel("Date")
     axes.set_ylabel("Average error")
     axes.set_title(f"Average prediction error per day: {group}")
@@ -307,10 +305,7 @@ def _plot_error(axes, df: pd.DataFrame, group: str):
 
 
 def _hist_error(axes, df: pd.DataFrame, group: str):
-    axes.hist(
-        df["mean_error"],
-        alpha=0.7,
-    )
+    axes.hist(df[MEAN_ERROR], alpha=0.7)
     axes.set_title(f"Error distribution: {group}")
     axes.set_xlabel("Error")
     axes.set_ylabel("Count of days with this mean error")
@@ -318,23 +313,14 @@ def _hist_error(axes, df: pd.DataFrame, group: str):
 
 
 def _plot_error_acf(axes, df: pd.DataFrame, group: str):
-    plot_acf_(
-        df["mean_error"],
-        lags=30,
-        ax=axes,
-        zero=False,
-    )
+    plot_acf_(df[MEAN_ERROR], lags=30, ax=axes, zero=False)
     axes.set_title(f"ACF of daily mean error: {group}")
     axes.grid(True, alpha=0.3)
 
 
 def plot_actual_pred(axes, df: pd.DataFrame, group: str):
     axes.plot(
-        df[VISIT_DATE_COL],
-        df[ACTUAL_MEAN],
-        label="Actual",
-        linewidth=2,
-        alpha=0.7,
+        df[VISIT_DATE_COL], df[ACTUAL_MEAN], label="Actual", linewidth=2, alpha=0.7
     )
     axes.plot(
         df[VISIT_DATE_COL],
@@ -352,9 +338,7 @@ def plot_actual_pred(axes, df: pd.DataFrame, group: str):
 
 
 def plot_daily_error_overall(
-    features: pd.DataFrame,
-    y_test: pd.Series,
-    y_pred: pd.Series,
+    features: pd.DataFrame, y_test: pd.Series, y_pred: pd.Series
 ) -> None:
     error_df = calc_errors(features, y_test, y_pred)
     daily_errors = calc_daily_errors(error_df)
@@ -377,10 +361,7 @@ def plot_daily_error_overall(
 
 
 def plot_daily_error_by_group(
-    features: pd.DataFrame,
-    y_test: pd.Series,
-    y_pred: pd.Series,
-    group_col: str,
+    features: pd.DataFrame, y_test: pd.Series, y_pred: pd.Series, group_col: str
 ) -> None:
     error_df = calc_errors(features, y_test, y_pred)
     daily_errors = calc_daily_errors_by_group(error_df, group_col)
@@ -413,3 +394,76 @@ def plot_daily_error_by_group(
 
     plt.tight_layout()
     plt.show()
+
+
+@show_figure(figsize=(8, 6))
+def plot_error_mean_std(df: pd.DataFrame, group_col: str):
+    groups = df[group_col]
+    palette = sns.color_palette("tab10", len(groups))
+
+    for color, group in zip(palette, groups):
+        subset = df[df[group_col] == group]
+
+        plt.scatter(
+            subset[MEAN_ERROR],
+            subset[STD_ERROR],
+            s=150,
+            color=color,
+            label=str(group),
+            edgecolor="black",
+        )
+
+    plt.axvline(x=0, color="gray", linestyle="--", linewidth=2, alpha=0.8)
+    plt.xlabel("Mean error")
+    plt.ylabel("Std error")
+    plt.title(f"Errors mean/std by {group_col}")
+    plt.legend(title=group_col, bbox_to_anchor=(1, 1), loc="upper left")
+    plt.tight_layout()
+
+
+@show_figure(figsize=(7, 7))
+def plot_error_radar(
+    df: pd.DataFrame,
+    group_col: str,
+    categories: list[str],
+    normalize: bool = False,
+):
+    plot_df = df.copy()
+    if normalize:
+        for col in categories:
+            max_val = plot_df[col].abs().max()
+            if max_val != 0:
+                plot_df[col] = plot_df[col] / max_val
+
+    num_vars = len(categories)
+    angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist()
+    angles += angles[:1]
+
+    ax = plt.subplot(polar=True)
+    palette = sns.color_palette("tab10", len(plot_df))
+
+    for color, (_, row) in zip(palette, plot_df.iterrows()):
+        values = row[categories].tolist()
+        values += values[:1]
+
+        ax.plot(angles, values, color=color, linewidth=2, label=row[group_col])
+        ax.fill(angles, values, color=color, alpha=0.1)
+
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(categories)
+    plt.title(f"Error by {group_col} - Radar chart")
+    plt.legend(bbox_to_anchor=(1.3, 1))
+    plt.tight_layout()
+
+
+@show_figure(figsize=(12, 6))
+def plot_errors_boxplot(
+    features: pd.DataFrame, y_test: pd.Series, y_pred: pd.Series, group_col: str
+):
+    error_df = calc_errors(features, y_test, y_pred)
+    daily_errors = calc_daily_errors_by_group(error_df, group_col)
+
+    sns.boxplot(data=daily_errors, x=group_col, y=MEAN_ERROR, showfliers=True)
+    plt.xticks(rotation=45)
+    plt.title(f"Error by {group_col} - Box Plot")
+    plt.tight_layout()

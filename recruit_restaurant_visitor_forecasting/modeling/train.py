@@ -157,6 +157,7 @@ def lgbm_optuna_search(
     random_state: int = 42,
     window_test_size: int = 1,
     mlflow_run_name: str = "study",
+    objective_func: str = "regression",
 ) -> tuple[optuna.Study, Pipeline]:
     drop_features = drop_features or []
 
@@ -184,7 +185,9 @@ def lgbm_optuna_search(
             f"model__num_leaves", 2**max_depth // 2, 2**max_depth
         )
 
-        pipeline = build_lgbm_pipeline(drop_features, random_state, features_top)
+        pipeline = build_lgbm_pipeline(
+            drop_features, random_state, features_top, objective=objective_func
+        )
         pipeline.set_params(**{f"model__{k}": v for k, v in params.items()})
 
         if features_top:
@@ -203,7 +206,9 @@ def lgbm_optuna_search(
     study = optuna.create_study(direction="minimize", sampler=sampler)
     study.optimize(objective, n_trials=n_trials, timeout=timeout, n_jobs=n_jobs)
 
-    best_pipeline = build_lgbm_pipeline(drop_features, random_state, features_top)
+    best_pipeline = build_lgbm_pipeline(
+        drop_features, random_state, features_top, objective=objective_func
+    )
     best_pipeline.set_params(**study.best_params)
     best_pipeline.fit(X, y)
 
