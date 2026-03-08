@@ -70,8 +70,6 @@ def get_opened_restaurants_pct(
 def get_open_by_weekday_pct(
     df: pd.DataFrame, visit_col: str, visitors_col: str
 ) -> pd.DataFrame:
-    df = df.copy()
-
     grouped = df.groupby([AIR_RESTAURANT_ID_COL, df[visit_col].dt.dayofweek])
     count = grouped.size()
     nonzero_count = grouped[visitors_col].agg(lambda s: s.ne(0).sum())
@@ -84,7 +82,7 @@ def get_open_by_weekday_pct(
 
 
 def get_open_status(pct_df: pd.DataFrame, threshold_ratio: float = 0.5):
-    pct_df = pct_df.copy()
+    pct_df = pct_df
     max_pct = pct_df[DAYS_OF_WEEK].max(axis=1)
     threshold = threshold_ratio * max_pct
 
@@ -179,8 +177,6 @@ def add_opened_recently_flg(
     id_col: str,
     n_month: int = 6,
 ) -> pd.DataFrame:
-
-    df = df.copy()
     df = df.merge(open_dates, left_on=id_col, right_index=True, how="left")
 
     threshold = df[date_col] - pd.DateOffset(months=n_month)
@@ -232,11 +228,8 @@ def add_time_based_target_encoding(
     date_col: str = VISIT_DATE_COL,
     min_samples: int = 30,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    train_df = train_df.copy()
-    test_df = test_df.copy()
-
     mask = (train_df[OPEN_USUALLY_COL] == 1) | (train_df[target_col] > 0)
-    stats_df = train_df[mask].copy()
+    stats_df = train_df[mask]
 
     daily = stats_df.groupby(date_col)[target_col].agg(["sum", "count"]).reset_index()
     daily["g_cum_sum"] = daily["sum"].cumsum() - daily["sum"]
@@ -312,7 +305,6 @@ def add_time_based_target_encoding(
 def add_sum_of_reserves(
     df: pd.DataFrame, output_col: str = None, id_col: str = AIR_RESTAURANT_ID_COL
 ) -> pd.DataFrame:
-    df = df.copy()
     df = df.groupby([id_col, VISIT_DATE_COL])[RESERVE_VISITORS_COL].sum()
     if output_col:
         df = df.rename(output_col)
@@ -349,12 +341,11 @@ def add_nbrs_reserves(
 
 
 def add_total_reserves(
-    df_visit: pd.DataFrame,
+    df: pd.DataFrame,
     air_res: pd.DataFrame,
     hpg_res: pd.DataFrame,
     region_col: str,
 ) -> pd.DataFrame:
-    df = df_visit.copy()
     merge_columns = [AIR_RESTAURANT_ID_COL, VISIT_DATE_COL, region_col]
     df = (
         df.merge(air_res, on=merge_columns, how="left")
@@ -370,9 +361,8 @@ def add_total_reserves(
 
 
 def add_total_nbr_reserves(
-    df_visit: pd.DataFrame, hpg_res: pd.DataFrame, region_col: str
+    df: pd.DataFrame, hpg_res: pd.DataFrame, region_col: str
 ) -> pd.DataFrame:
-    df = df_visit.copy()
     df = df.merge(
         hpg_res.groupby([VISIT_DATE_COL, region_col])[RESERVE_HPG_NBR_COL]
         .median()
@@ -420,7 +410,7 @@ def add_basic_stats(
             ("std", {"ddof": 0}),
         ]
 
-    df = df.sort_values([id_col, VISIT_DATE_COL]).copy()
+    df = df.sort_values([id_col, VISIT_DATE_COL])
 
     masked = prepare_masked_series(
         df,
@@ -450,7 +440,7 @@ def add_neighbors_stats(
     rename_col: bool = True,
 ):
     orig_df = df
-    df = df[[VISIT_DATE_COL, grouping_col, target_col, OPEN_USUALLY_COL]].copy()
+    df = df[[VISIT_DATE_COL, grouping_col, target_col, OPEN_USUALLY_COL]]
     if rename_col:
         nbr_target = nbrs_col(target_col)
         df.rename(columns={target_col: nbr_target}, inplace=True)
@@ -503,8 +493,6 @@ def add_historical_dow_mean(
     feature_name: str,
     test_df: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-
-    df = df.copy()
     df = df.sort_values([AIR_RESTAURANT_ID_COL, VISIT_DATE_COL])
     grouping_keys = [AIR_RESTAURANT_ID_COL, DAY_OF_WEEK_COL]
 
@@ -566,7 +554,7 @@ def drop_first_month(df: pd.DataFrame) -> pd.DataFrame:
     open_dates = df[OPEN_DATE_COL]
     mask = df[VISIT_DATE_COL] >= (open_dates + pd.DateOffset(months=1))
 
-    return df[mask].copy()
+    return df[mask]
 
 
 def calc_air_hpg_scale(
@@ -574,8 +562,8 @@ def calc_air_hpg_scale(
     hpg_df: pd.DataFrame,
     gap_dates,
 ) -> tuple[pd.DataFrame, float]:
-    air_non_gap = air_df[~air_df[VISIT_DATE_COL].isin(gap_dates)].copy()
-    hpg_non_gap = hpg_df[~hpg_df[VISIT_DATE_COL].isin(gap_dates)].copy()
+    air_non_gap = air_df[~air_df[VISIT_DATE_COL].isin(gap_dates)]
+    hpg_non_gap = hpg_df[~hpg_df[VISIT_DATE_COL].isin(gap_dates)]
 
     air_daily = add_sum_of_reserves(air_non_gap, "air")
     hpg_daily = add_sum_of_reserves(hpg_non_gap, "hpg")
@@ -606,7 +594,7 @@ def fill_air_res_without_hpg(
     air_non_gap = air_df[~air_df[VISIT_DATE_COL].isin(gap_dates)]
     air_non_gap = air_non_gap[
         air_non_gap[AIR_RESTAURANT_ID_COL].isin(ids_without_hpg)
-    ].copy()
+    ]
 
     air_non_gap[DAY_OF_WEEK_COL] = air_non_gap[VISIT_DATE_COL].dt.dayofweek
     air_daily_non_gap = (
@@ -652,7 +640,7 @@ def fill_air_res_gaps(
 
     scaling_factors, overall_median = calc_air_hpg_scale(air_df, hpg_df, gap_dates)
 
-    hpg_gap = hpg_df[hpg_df[VISIT_DATE_COL].isin(gap_dates)].copy()
+    hpg_gap = hpg_df[hpg_df[VISIT_DATE_COL].isin(gap_dates)]
     hpg_gap_daily = add_sum_of_reserves(hpg_gap)
     hpg_gap_scaled = hpg_gap_daily.merge(
         scaling_factors, on=AIR_RESTAURANT_ID_COL, how="left"
@@ -677,7 +665,7 @@ def fill_air_res_gaps(
     )
     est_air_rows = pd.concat([estimated_air_rows_hpg, est_air_rows], ignore_index=True)
 
-    air_filtered = air_df[~air_df[VISIT_DATE_COL].isin(gap_dates)].copy()
+    air_filtered = air_df[~air_df[VISIT_DATE_COL].isin(gap_dates)]
     air_filtered = pd.concat([air_filtered, est_air_rows], ignore_index=True)
     air_filtered = air_filtered.sort_values([AIR_RESTAURANT_ID_COL, VISIT_DATE_COL])
 

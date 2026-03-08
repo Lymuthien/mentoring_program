@@ -117,7 +117,7 @@ def recursive_predict(
     feature_exclude = {id_col, VISIT_DATE_COL, VISITORS_COL, *drop_cols}
 
     combined = pd.concat(
-        [train_features.copy(), test_features.copy()], ignore_index=True
+        [train_features, test_features], ignore_index=True
     )
     combined[VISITORS_COL] = 0.0
     combined.loc[: len(train_features) - 1, VISITORS_COL] = train_labels.values

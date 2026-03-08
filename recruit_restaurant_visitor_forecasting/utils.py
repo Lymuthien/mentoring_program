@@ -164,7 +164,7 @@ def rmsle(y_true, y_pred) -> float:
 def calc_errors(
     features: pd.DataFrame, y_test: pd.Series, y_pred: pd.Series
 ) -> pd.DataFrame:
-    error_df = features[[VISIT_DATE_COL, AIR_RESTAURANT_ID_COL]].copy()
+    error_df = features[[VISIT_DATE_COL, AIR_RESTAURANT_ID_COL]]
     if CITY_COL in features.columns:
         error_df[CITY_COL] = features[CITY_COL]
     if AIR_GENRE_COL in features.columns:
@@ -215,7 +215,7 @@ def get_daily_error_stats_table(
     rows: list[dict] = []
     for group in groups:
         group_str = str(group)
-        group_data = daily_errors[daily_errors[group_col] == group].copy()
+        group_data = daily_errors[daily_errors[group_col] == group]
         series = group_data[MEAN_ERROR].reset_index(drop=True)
 
         row = {
