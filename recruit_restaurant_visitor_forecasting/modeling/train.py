@@ -11,8 +11,8 @@ from typing import Optional, Union
 from recruit_restaurant_visitor_forecasting.config import (
     AIR_RESTAURANT_ID_COL,
     VISIT_DATE_COL,
+    PROCESSED_DATA_DIR
 )
-from recruit_restaurant_visitor_forecasting.dataset import DataDir, read_csv
 from recruit_restaurant_visitor_forecasting.modeling.cv import (
     ExpandingWindowSplit,
     cv_recursive_score,
@@ -25,8 +25,8 @@ from recruit_restaurant_visitor_forecasting.utils import rmsle
 
 
 def load_data() -> tuple:
-    features = read_csv("features.csv", DataDir.PROCESSED)
-    labels = read_csv("labels.csv", DataDir.PROCESSED)
+    features = pd.read_csv(PROCESSED_DATA_DIR / "features.csv")
+    labels = pd.read_csv(PROCESSED_DATA_DIR / "labels.csv")
 
     if isinstance(labels, pd.DataFrame):
         labels = labels.iloc[:, 0]
