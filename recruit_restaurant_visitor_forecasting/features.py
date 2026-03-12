@@ -38,6 +38,9 @@ GOLDEN_WEEK_FLG = "golden_week_flg"
 OPENED_RECENTLY_FLG = "opened_recently"
 DAYS_FROM_LAST_VISIT_COL = "days_from_last_visit"
 OPEN_USUALLY_COL = "open_usually"
+G_CUM_SUM = "global_cum_sum"
+G_CUM_CNT = "global_cum_count"
+G_MEAN = "global_mean"
 
 
 def get_first_str_values(s: pd.Series, n: int, sep: str = " ") -> pd.Series:
@@ -232,9 +235,9 @@ def add_time_based_target_encoding(
     stats_df = train_df[mask]
 
     daily = stats_df.groupby(date_col)[target_col].agg(["sum", "count"]).reset_index()
-    daily["g_cum_sum"] = daily["sum"].cumsum() - daily["sum"]
-    daily["g_cum_cnt"] = daily["count"].cumsum() - daily["count"]
-    daily["global_mean"] = daily["g_cum_sum"] / daily["g_cum_cnt"].replace(0, np.nan)
+    daily[G_CUM_SUM] = daily["sum"].cumsum() - daily["sum"]
+    daily[G_CUM_CNT] = daily["count"].cumsum() - daily["count"]
+    daily[G_MEAN] = daily[G_CUM_SUM] / daily[G_CUM_CNT].replace(0, np.nan)
 
     agg = (
         stats_df.groupby([category_col, date_col])[target_col]
@@ -245,7 +248,7 @@ def add_time_based_target_encoding(
     agg["cum_cnt"] = agg.groupby(category_col)["count"].cumsum() - agg["count"]
 
     agg = agg.merge(
-        daily[[date_col, "global_mean"]],
+        daily[[date_col, G_MEAN]],
         on=date_col,
         how="left",
     )
@@ -253,8 +256,8 @@ def add_time_based_target_encoding(
     smoothing = 1 / (1 + np.exp(-(agg["cum_cnt"] - min_samples)))
 
     agg[feature_name] = (
-        agg["global_mean"] * (1 - smoothing)
-        + category_mean.fillna(agg["global_mean"]) * smoothing
+        agg[G_MEAN] * (1 - smoothing)
+        + category_mean.fillna(agg[G_MEAN]) * smoothing
     )
 
     first_dates = agg.groupby(category_col)[date_col].min().reset_index()
@@ -291,7 +294,7 @@ def add_time_based_target_encoding(
     last_genre_values = enc.loc[
         enc.groupby(category_col)[date_col].idxmax(), [category_col, feature_name]
     ].reset_index(drop=True)
-    last_global_mean = daily["global_mean"].iloc[-1] if len(daily) > 0 else 0
+    last_global_mean = daily[G_MEAN].iloc[-1] if len(daily) > 0 else 0
 
     train_encoded = train_df.merge(enc, on=[category_col, date_col], how="left")
 
