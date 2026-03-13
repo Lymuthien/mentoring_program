@@ -1,5 +1,6 @@
 from functools import wraps
 
+import folium
 import seaborn as sns
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -162,12 +163,21 @@ def subplot_visitors_by_restaurant(
     plt.grid(True, alpha=0.3)
 
 
-@show_figure(figsize=(6, 6))
-def plot_location_scatter(df: pd.DataFrame, df_str: str) -> None:
-    plt.scatter(df[LONGITUDE_COL], df[LATITUDE_COL], s=10)
-    plt.title(f"{df_str}: store locations")
-    plt.xlabel("Longitude")
-    plt.ylabel("Latitude")
+def plot_location_map(df: pd.DataFrame) -> folium.Map:
+    center = [df[LATITUDE_COL].mean(), df[LONGITUDE_COL].mean()]
+    m = folium.Map(location=center, zoom_start=6, tiles="CartoDB positron")
+
+    for _, row in df.iterrows():
+        folium.CircleMarker(
+            location=[row[LATITUDE_COL], row[LONGITUDE_COL]],
+            radius=2,
+            color="red",
+            fill=True,
+            fill_opacity=0.7,
+            tooltip=row[CITY_COL],
+        ).add_to(m)
+
+    return m
 
 
 def plot_top_freq_values(
@@ -234,27 +244,6 @@ def plot_weekly_seasonality(df: pd.DataFrame, visitors_col: str, title: str):
     plt.gca().set(ylabel=visitors_col, xlabel="Day of week")
     plt.legend(title="Month", bbox_to_anchor=(1.05, 1), loc="upper left")
     plt.title(title)
-
-
-def plot_visitors_for_first_period(
-    df: pd.DataFrame,
-    visitors_col: str,
-    n_month: int = 3,
-):
-    min_date = df.index.min()
-    max_allowed_date = min_date + pd.DateOffset(months=n_month)
-    df.loc[(df.index <= max_allowed_date)].groupby(VISIT_DATE_COL)[
-        visitors_col
-    ].mean().plot(
-        title=f"Visitors for first {n_month} month - Time Plot",
-        figsize=(10, 6),
-        color="orange",
-    )
-
-    plt.ylabel("Visitors")
-    plt.xlabel("Date")
-    plt.grid(alpha=0.3)
-    plt.show()
 
 
 @show_figure(figsize=(10, 6))
