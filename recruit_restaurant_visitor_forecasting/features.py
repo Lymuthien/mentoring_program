@@ -50,7 +50,7 @@ def get_first_str_values(s: pd.Series, n: int, sep: str = " ") -> pd.Series:
 def get_opened_restaurants_pct(
     df: pd.DataFrame, visit_col: str, id_col: str
 ) -> pd.DataFrame:
-    min_dates = df.reset_index().groupby(id_col)[visit_col].min()
+    min_dates = df.groupby(id_col)[visit_col].min()
     cumulative_restaurants = (
         min_dates.sort_values().value_counts().sort_index().cumsum()
     )
@@ -114,16 +114,19 @@ def add_open_usually(df: pd.DataFrame, drop_days: bool = True):
     return df
 
 
-def add_seasonal_columns(df: pd.DataFrame):
-    index: pd.DatetimeIndex = df.index
+def add_seasonal_columns(df: pd.DataFrame, date_col: str) -> pd.DataFrame:
+    df = df.copy()
+    dates = df[date_col].dt
 
-    df[YEAR_COL] = index.year
-    df[MONTH_COL] = index.month
-    df[DAY_COL] = index.day
-    df[WEEK_COL] = index.isocalendar().week
-    df[DAY_OF_WEEK_COL] = index.day_of_week
-    df[DAY_STR_COL] = index.strftime("%a")
-    df[YEAR_MONTH_COL] = index.year.astype(str) + "_" + index.month.astype(str)
+    df[YEAR_COL] = dates.year
+    df[MONTH_COL] = dates.month
+    df[DAY_COL] = dates.day
+    df[WEEK_COL] = dates.isocalendar().week
+    df[DAY_OF_WEEK_COL] = dates.day_of_week
+    df[DAY_STR_COL] = dates.strftime("%a")
+    df[YEAR_MONTH_COL] = dates.year.astype(str) + "_" + dates.month.astype(str)
+
+    return df
 
 
 def add_holiday_columns(df: pd.DataFrame, date_col: str):
@@ -638,8 +641,6 @@ def fill_air_res_gaps(
     air_df: pd.DataFrame, hpg_df: pd.DataFrame, gap_dates: list[pd.Timestamp]
 ) -> pd.DataFrame:
     gap_dates = pd.to_datetime(gap_dates)
-    air_df = air_df.reset_index()
-    hpg_df = hpg_df.reset_index()
 
     scaling_factors, overall_median = calc_air_hpg_scale(air_df, hpg_df, gap_dates)
 

@@ -19,8 +19,8 @@ def prepare_datetime_columns(df: pd.DataFrame):
 def split_reserve_by_date(
     df: pd.DataFrame, cutoff_date: pd.Timestamp, col: str = VISIT_DATETIME_COL
 ):
-    occurred = df[df[col] < cutoff_date].copy()
-    target = df[df[col] >= cutoff_date].copy()
+    occurred = df[df[col] < cutoff_date]
+    target = df[df[col] >= cutoff_date]
 
     return occurred, target
 

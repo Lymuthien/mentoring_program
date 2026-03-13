@@ -15,11 +15,15 @@ from recruit_restaurant_visitor_forecasting.config import (
     LATITUDE_COL,
     LONGITUDE_COL,
     MONTH_COL,
-    PERCENTAGE_COL,
     VISIT_DATE_COL,
-    VISITORS_DIFF_COL,
     ACTUAL_MEAN,
     PRED_MEAN,
+    CITY_COL,
+    CITY_REGION_COL,
+    VISITORS_COL,
+    AIR_GENRE_COL,
+    RESERVE_VISITORS_COL,
+    AIR_RESTAURANT_ID_COL,
 )
 from recruit_restaurant_visitor_forecasting.utils import (
     calc_errors,
@@ -30,6 +34,9 @@ from recruit_restaurant_visitor_forecasting.utils import (
     STD_ERROR,
 )
 
+CITY_STR = "City"
+CITY_REGION_STR = "City-Region"
+GENRE_STR = "Genre"
 MONTH_COLORS = np.random.choice(list(mpl.colors.XKCD_COLORS.keys()), 12, replace=False)
 
 
@@ -59,9 +66,9 @@ def plot_restaurant_mention_hist(
     first: bool = True,
 ):
     if first:
-        df.reset_index().groupby(grouping_col)[date_col].min().hist(bins=50)
+        df.groupby(grouping_col)[date_col].min().hist(bins=50)
     else:
-        df.reset_index().groupby(grouping_col)[date_col].max().hist(bins=50)
+        df.groupby(grouping_col)[date_col].max().hist(bins=50)
     text: str = "first" if first else "last"
     plt.xlabel(f"Date of {text} mention")
     plt.ylabel("Count of restaurants")
@@ -70,24 +77,19 @@ def plot_restaurant_mention_hist(
 
 
 @show_figure(figsize=(10, 6))
-def plot_opened_restaurants(
-    df: pd.DataFrame, df_str: str, visit_col: str, store_col: str
-) -> None:
-    plt.figure(figsize=(10, 6))
-    df.groupby(visit_col)[store_col].count().plot()
+def plot_opened_restaurants(df: pd.Series, df_str: str) -> None:
+    df.plot()
     plt.xlabel("Date")
     plt.ylabel("Count of opened (not missed) restaurants")
     plt.title(f"{df_str} - Not missed restaurants - Time plot")
 
 
 @show_figure(figsize=(10, 6))
-def plot_opened_restaurants_pct(df: pd.DataFrame, df_str: str):
-    df[PERCENTAGE_COL].plot()
+def plot_opened_restaurants_pct(df: pd.Series, df_str: str):
+    df.plot()
     plt.xlabel("Date")
     plt.ylabel("Percentage of not missed restaurants (%)")
-    plt.title(
-        f"{df_str} - Percentage of not missed restaurants (including only mentioned restaurants) - Time plot"
-    )
+    plt.title(f"{df_str} - Percentage of mentioned restaurants - Time plot")
     plt.grid(True)
 
 
@@ -100,9 +102,8 @@ def plot_daily_corr(df: pd.DataFrame, col1: str, col2: str) -> None:
     plt.grid(True)
 
 
-def plot_mean_by_date(df: pd.DataFrame):
-    mean = df.groupby(VISIT_DATE_COL)[VISITORS_DIFF_COL].mean()
-    mean.plot(
+def plot_mean_diff_by_date(df: pd.Series):
+    df.plot(
         xlabel="Date",
         ylabel="Difference",
         title=f"Mean difference between reservations and visitors",
@@ -111,7 +112,7 @@ def plot_mean_by_date(df: pd.DataFrame):
     plt.show()
 
 
-def subplot_visitors_over_time(df: pd.DataFrame, subplot: list, df_str: str) -> None:
+def _subplot_mean_visitors(df: pd.Series, subplot: list, df_str: str) -> None:
     plt.subplot(*subplot)
     df.plot(linewidth=0.8, color="orange")
     plt.title(f"{df_str} - Mean visitors by visit date - Time Plot")
@@ -120,9 +121,7 @@ def subplot_visitors_over_time(df: pd.DataFrame, subplot: list, df_str: str) -> 
     plt.grid(True, alpha=0.3)
 
 
-def subplot_visitors_over_time_hist(
-    df: pd.DataFrame, subplot: list, df_str: str
-) -> None:
+def _subplot_visitors_hist(df: pd.Series, subplot: list, df_str: str) -> None:
     plt.subplot(*subplot)
     df.hist(bins=50, edgecolor="black")
     plt.title(f"{df_str} - Mean visitors by visit date - Histogram")
@@ -131,19 +130,7 @@ def subplot_visitors_over_time_hist(
     plt.grid(True, alpha=0.3)
 
 
-def box_subplot_visitors_over_time(
-    df: pd.DataFrame, subplot: list, df_str: str
-) -> None:
-    plt.subplot(*subplot)
-    df.plot(kind="box", vert=False)
-    plt.title(f"{df_str} - Mean visitors by visit date - Box Plot")
-    plt.xlabel("Mean visitors count")
-    plt.grid(True, alpha=0.3)
-
-
-def box_subplot_reservations_over_time(
-    df: pd.DataFrame, subplot: list, df_str: str
-) -> None:
+def _subplot_reservations_count(df: pd.Series, subplot: list, df_str: str) -> None:
     plt.subplot(*subplot)
     df.plot()
     plt.title(f"{df_str} - Count of reservations by visit date - Time plot")
@@ -152,9 +139,16 @@ def box_subplot_reservations_over_time(
     plt.grid(True, alpha=0.3)
 
 
-def subplot_visitors_by_restaurant(
-    df: pd.DataFrame, subplot: list, df_str: str
-) -> None:
+def _subplot_visitors_sum(df: pd.Series, subplot: list, df_str: str) -> None:
+    plt.subplot(*subplot)
+    df.plot()
+    plt.title(f"{df_str} - Sum of visitors by visit date - Time plot")
+    plt.xlabel("Day")
+    plt.ylabel("Sum of visitors")
+    plt.grid(True, alpha=0.3)
+
+
+def _subplot_visitors_by_restaurant(df: pd.Series, subplot: list, df_str: str) -> None:
     plt.subplot(*subplot)
     df.hist(bins=30, edgecolor="black")
     plt.title(f"{df_str} - Mean visitors by restaurant - Histogram")
@@ -163,9 +157,39 @@ def subplot_visitors_by_restaurant(
     plt.grid(True, alpha=0.3)
 
 
+@show_figure(figsize=(15, 10))
+def plot_visitors_df_distr(df: pd.DataFrame, df_str: str):
+    visitors = df.groupby(VISIT_DATE_COL)[VISITORS_COL]
+    mean_visitors = visitors.mean()
+    visitors_by_rst = df.groupby(AIR_RESTAURANT_ID_COL)[VISITORS_COL].mean()
+
+    _subplot_mean_visitors(mean_visitors, [2, 2, 1], df_str)
+    _subplot_visitors_hist(mean_visitors, [2, 2, 2], df_str)
+    _subplot_visitors_sum(visitors.sum(), [2, 2, 3], df_str)
+    _subplot_visitors_by_restaurant(visitors_by_rst, [2, 2, 4], df_str)
+
+    plt.tight_layout()
+
+
+@show_figure(figsize=(15, 10))
+def plot_reserve_df_distr(df: pd.DataFrame, df_str: str):
+    visitors = df.groupby(VISIT_DATE_COL)[RESERVE_VISITORS_COL]
+    mean_visitors = visitors.mean()
+
+    _subplot_mean_visitors(mean_visitors, [2, 2, 1], df_str)
+    _subplot_visitors_hist(mean_visitors, [2, 2, 2], df_str)
+    _subplot_visitors_sum(visitors.sum(), [2, 2, 3], df_str)
+    _subplot_reservations_count(visitors.count(), [2, 2, 4], df_str)
+
+    plt.tight_layout()
+
+
 def plot_location_map(df: pd.DataFrame) -> folium.Map:
-    center = [df[LATITUDE_COL].mean(), df[LONGITUDE_COL].mean()]
-    m = folium.Map(location=center, zoom_start=6, tiles="CartoDB positron")
+    m = folium.Map(tiles="CartoDB Voyager")
+    m.fit_bounds([
+        [df[LATITUDE_COL].min(), df[LONGITUDE_COL].min()],
+        [df[LATITUDE_COL].max(), df[LONGITUDE_COL].max()]
+    ])
 
     for _, row in df.iterrows():
         folium.CircleMarker(
@@ -180,14 +204,14 @@ def plot_location_map(df: pd.DataFrame) -> folium.Map:
     return m
 
 
-def plot_top_freq_values(
+def _plot_top_freq_values(
     df: pd.DataFrame,
     df_str: str,
     col: str,
     subplot: list,
     value_name: str,
     ascending: bool = False,
-    count=10,
+    count: int = 10,
 ):
     plt.subplot(*subplot)
     counts = df[col].value_counts(ascending=ascending)
@@ -198,15 +222,27 @@ def plot_top_freq_values(
     plt.title(f"{df_str} - {value_name} {'anti-top' if ascending else 'top'}")
 
 
+@show_figure(figsize=(12, 12))
+def plot_top_genres_cities(df: pd.DataFrame, df_str: str, genre_col: str):
+    _plot_top_freq_values(df, df_str, CITY_REGION_COL, [3, 2, 1], CITY_REGION_STR)
+    _plot_top_freq_values(df, df_str, CITY_REGION_COL, [3, 2, 2], CITY_REGION_STR, True)
+    _plot_top_freq_values(df, df_str, CITY_COL, [3, 2, 3], CITY_STR)
+    _plot_top_freq_values(df, df_str, CITY_COL, [3, 2, 4], CITY_STR, True)
+    _plot_top_freq_values(df, df_str, genre_col, [3, 2, 5], GENRE_STR)
+    _plot_top_freq_values(df, df_str, genre_col, [3, 2, 6], GENRE_STR, True)
+
+    plt.tight_layout()
+
+
 def plot_top_values_by_col(
-    df: pd.DataFrame,
+    df: pd.Series,
     df_str: str,
     value_col: str,
     subplot: list,
     value_name: str,
     col: str,
     ascending: bool = False,
-    count=10,
+    count: int = 10,
 ):
     plt.subplot(*subplot)
     means = df.groupby(value_col)[col].mean().sort_values(ascending=ascending)
@@ -217,6 +253,22 @@ def plot_top_values_by_col(
     plt.title(
         f"{df_str} - Mean {col} by {value_name} {'anti-top' if ascending else 'top'}"
     )
+
+
+@show_figure(figsize=(12, 10))
+def plot_visitors_by_genre_city(df: pd.Series, df_str: str):
+    plot_top_values_by_col(df, df_str, CITY_COL, [2, 2, 1], CITY_STR, VISITORS_COL)
+    plot_top_values_by_col(
+        df, df_str, CITY_COL, [2, 2, 2], CITY_STR, VISITORS_COL, True
+    )
+    plot_top_values_by_col(
+        df, df_str, AIR_GENRE_COL, [2, 2, 3], GENRE_STR, VISITORS_COL
+    )
+    plot_top_values_by_col(
+        df, df_str, AIR_GENRE_COL, [2, 2, 4], GENRE_STR, VISITORS_COL, True
+    )
+
+    plt.tight_layout()
 
 
 @show_figure(figsize=(10, 6))
