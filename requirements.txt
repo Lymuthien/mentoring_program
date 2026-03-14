@@ -16,4 +16,4 @@ shap>=0.50.0
 optuna>=4.6.0
 lightgbm>=4.6.0
 pytest>=8.4.2
-folium>=0.20.0
+plotly>=6.6.0

@@ -1,9 +1,9 @@
 from functools import wraps
 
-import folium
 import seaborn as sns
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import plotly.express as px
 import numpy as np
 import pandas as pd
 from matplotlib.gridspec import GridSpec
@@ -184,24 +184,19 @@ def plot_reserve_df_distr(df: pd.DataFrame, df_str: str):
     plt.tight_layout()
 
 
-def plot_location_map(df: pd.DataFrame) -> folium.Map:
-    m = folium.Map(tiles="CartoDB Voyager")
-    m.fit_bounds([
-        [df[LATITUDE_COL].min(), df[LONGITUDE_COL].min()],
-        [df[LATITUDE_COL].max(), df[LONGITUDE_COL].max()]
-    ])
+def plot_location_map(df: pd.DataFrame) -> None:
+    fig = px.scatter_map(
+        df,
+        lat=LATITUDE_COL,
+        lon=LONGITUDE_COL,
+        color=CITY_COL,
+        hover_name=CITY_COL,
+        zoom=4,
+        height=700,
+    )
 
-    for _, row in df.iterrows():
-        folium.CircleMarker(
-            location=[row[LATITUDE_COL], row[LONGITUDE_COL]],
-            radius=2,
-            color="red",
-            fill=True,
-            fill_opacity=0.7,
-            tooltip=row[CITY_COL],
-        ).add_to(m)
-
-    return m
+    fig.update_layout(mapbox_style="carto-positron")
+    fig.show()
 
 
 def _plot_top_freq_values(
