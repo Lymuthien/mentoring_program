@@ -34,6 +34,7 @@ from recruit_restaurant_visitor_forecasting.feature_names import (
     nbrs_col,
     last_month_col,
     lag_col,
+    agg_window_col,
 )
 
 SCALE_COL = "scale"
@@ -43,9 +44,11 @@ GOLDEN_WEEK_FLG = "golden_week_flg"
 OPENED_RECENTLY_FLG = "opened_recently"
 DAYS_FROM_LAST_VISIT_COL = "days_from_last_visit"
 OPEN_USUALLY_COL = "open_usually"
-G_CUM_SUM = "global_cum_sum"
-G_CUM_CNT = "global_cum_count"
+CUM_SUM = "cum_sum"
+CUM_CNT = "cum_count"
 G_MEAN = "global_mean"
+IS_CURRENT_DF = "_is_current"
+LOOKUP_DATE_COL = "_last_month_date"
 
 
 def get_first_str_values(s: pd.Series, n: int, sep: str = " ") -> pd.Series:
@@ -200,7 +203,6 @@ def add_days_since_last_record(
     df: pd.DataFrame, id_col: str, date_col: str, history_df: pd.DataFrame = None
 ) -> pd.DataFrame:
     df = df.copy()
-    IS_CURRENT_DF = "_is_current"
 
     if history_df is not None:
         history_df = history_df.copy()
@@ -239,33 +241,29 @@ def add_time_based_target_encoding(
     date_col: str = VISIT_DATE_COL,
     min_samples: int = 30,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    mask = (train_df[OPEN_USUALLY_COL] == 1) | (train_df[target_col] > 0)
-    stats_df = train_df[mask]
+    opened_mask = (train_df[OPEN_USUALLY_COL] == 1) | (train_df[target_col] > 0)
+    df = train_df[opened_mask]
 
-    daily = stats_df.groupby(date_col)[target_col].agg(["sum", "count"]).reset_index()
-    daily[G_CUM_SUM] = daily["sum"].cumsum() - daily["sum"]
-    daily[G_CUM_CNT] = daily["count"].cumsum() - daily["count"]
-    daily[G_MEAN] = daily[G_CUM_SUM] / daily[G_CUM_CNT].replace(0, np.nan)
+    daily = df.groupby(date_col)[target_col].agg(["sum", "count"]).reset_index()
+    daily[CUM_SUM] = daily["sum"].cumsum() - daily["sum"]
+    daily[CUM_CNT] = daily["count"].cumsum() - daily["count"]
+    daily[G_MEAN] = daily[CUM_SUM] / daily[CUM_CNT].replace(0, np.nan)
+    daily = daily[[date_col, G_MEAN]]
 
     agg = (
-        stats_df.groupby([category_col, date_col])[target_col]
+        df.groupby([category_col, date_col])[target_col]
         .agg(["sum", "count"])
         .reset_index()
     )
-    agg["cum_sum"] = agg.groupby(category_col)["sum"].cumsum() - agg["sum"]
-    agg["cum_cnt"] = agg.groupby(category_col)["count"].cumsum() - agg["count"]
+    agg[CUM_SUM] = agg.groupby(category_col)["sum"].cumsum() - agg["sum"]
+    agg[CUM_CNT] = agg.groupby(category_col)["count"].cumsum() - agg["count"]
 
-    agg = agg.merge(
-        daily[[date_col, G_MEAN]],
-        on=date_col,
-        how="left",
-    )
-    category_mean = agg["cum_sum"] / agg["cum_cnt"].replace(0, np.nan)
-    smoothing = 1 / (1 + np.exp(-(agg["cum_cnt"] - min_samples)))
+    agg = agg.merge(daily, on=date_col, how="left")
+    category_mean = agg[CUM_SUM] / agg[CUM_CNT].replace(0, np.nan)
+    smoothing = 1 / (1 + np.exp(-(agg[CUM_CNT] - min_samples)))
 
     agg[feature_name] = (
-        agg[G_MEAN] * (1 - smoothing)
-        + category_mean.fillna(agg[G_MEAN]) * smoothing
+        agg[G_MEAN] * (1 - smoothing) + category_mean.fillna(agg[G_MEAN]) * smoothing
     )
 
     first_dates = agg.groupby(category_col)[date_col].min().reset_index()
@@ -302,7 +300,7 @@ def add_time_based_target_encoding(
     last_genre_values = enc.loc[
         enc.groupby(category_col)[date_col].idxmax(), [category_col, feature_name]
     ].reset_index(drop=True)
-    last_global_mean = daily[G_MEAN].iloc[-1] if len(daily) > 0 else 0
+    last_global_mean = daily[G_MEAN].iloc[-1]
 
     train_encoded = train_df.merge(enc, on=[category_col, date_col], how="left")
 
@@ -437,7 +435,7 @@ def add_basic_stats(
         r = grouped.rolling(window, min_periods=1)
 
         for agg, agg_kwargs in aggs:
-            col = f"{target_col}_{agg}_{window}"
+            col = agg_window_col(target_col, agg, window)
             result[col] = r.agg(agg, **agg_kwargs).reset_index(level=0, drop=True)
 
     return result
@@ -485,15 +483,14 @@ def add_last_month_visitors(
 
     df = df.copy()
     ref_df = df if reference_df is None else reference_df
-    lookup_date_col = "_last_month_date"
 
-    df[lookup_date_col] = df[VISIT_DATE_COL] - pd.DateOffset(months=1)
+    df[LOOKUP_DATE_COL] = df[VISIT_DATE_COL] - pd.DateOffset(months=1)
     lookup = ref_df[[AIR_RESTAURANT_ID_COL, VISIT_DATE_COL, target_col]].rename(
-        columns={VISIT_DATE_COL: lookup_date_col, target_col: feature_col}
+        columns={VISIT_DATE_COL: LOOKUP_DATE_COL, target_col: feature_col}
     )
 
-    df = df.merge(lookup, on=[AIR_RESTAURANT_ID_COL, lookup_date_col], how="left")
-    df.drop(columns=lookup_date_col, inplace=True)
+    df = df.merge(lookup, on=[AIR_RESTAURANT_ID_COL, LOOKUP_DATE_COL], how="left")
+    df.drop(columns=LOOKUP_DATE_COL, inplace=True)
 
     return df
 
@@ -603,9 +600,7 @@ def fill_air_res_without_hpg(
     ids_without_hpg = air_ids - ids_with_hpg
 
     air_non_gap = air_df[~air_df[VISIT_DATE_COL].isin(gap_dates)]
-    air_non_gap = air_non_gap[
-        air_non_gap[AIR_RESTAURANT_ID_COL].isin(ids_without_hpg)
-    ]
+    air_non_gap = air_non_gap[air_non_gap[AIR_RESTAURANT_ID_COL].isin(ids_without_hpg)]
 
     air_non_gap[DAY_OF_WEEK_COL] = air_non_gap[VISIT_DATE_COL].dt.dayofweek
     air_daily_non_gap = (
@@ -681,11 +676,11 @@ def fill_air_res_gaps(
     return air_filtered
 
 
-def fill_city_by_nearest(df: pd.DataFrame) -> pd.DataFrame:
+def fill_city_by_nearest(df: pd.DataFrame, none_val: str = "None") -> pd.DataFrame:
     df = df.copy()
 
-    known = df[df[CITY_COL] != "None"]
-    unknown = df[df[CITY_COL] == "None"]
+    known = df[df[CITY_COL] != none_val]
+    unknown = df[df[CITY_COL] == none_val]
 
     if len(unknown) == 0:
         return df
@@ -693,7 +688,7 @@ def fill_city_by_nearest(df: pd.DataFrame) -> pd.DataFrame:
     known_coords = np.radians(known[[LATITUDE_COL, LONGITUDE_COL]].values)
     unknown_coords = np.radians(unknown[[LATITUDE_COL, LONGITUDE_COL]].values)
 
-    tree = BallTree(known_coords, metric='haversine')
+    tree = BallTree(known_coords, metric="haversine")
 
     _, ind = tree.query(unknown_coords, k=1)
     nearest_cities = known.iloc[ind.flatten()][CITY_COL].values
