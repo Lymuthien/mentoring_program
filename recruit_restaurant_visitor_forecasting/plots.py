@@ -199,34 +199,50 @@ def plot_location_map(df: pd.DataFrame) -> None:
     fig.show()
 
 
-def _plot_top_freq_values(
+def _plot_top_freq_val(
     df: pd.DataFrame,
     df_str: str,
     col: str,
-    subplot: list,
+    ax: plt.Axes,
     value_name: str,
     ascending: bool = False,
     count: int = 10,
 ):
-    plt.subplot(*subplot)
     counts = df[col].value_counts(ascending=ascending)
-    counts.head(count).plot(kind="bar", alpha=0.8)
-    plt.ylabel("Count of restaurants")
-    plt.xlabel(value_name)
-    plt.xticks(rotation=45, ha="right")
-    plt.title(f"{df_str} - {value_name} {'anti-top' if ascending else 'top'}")
+    counts.head(count).plot(kind="bar", alpha=0.8, ax=ax)
+    ax.set_ylabel("Count of restaurants")
+    ax.set_xlabel(value_name)
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
+    ax.set_title(f"{df_str} - {value_name} {'anti-top' if ascending else 'top'}")
 
 
-@show_figure(figsize=(12, 12))
-def plot_top_genres_cities(df: pd.DataFrame, df_str: str, genre_col: str):
-    _plot_top_freq_values(df, df_str, CITY_REGION_COL, [3, 2, 1], CITY_REGION_STR)
-    _plot_top_freq_values(df, df_str, CITY_REGION_COL, [3, 2, 2], CITY_REGION_STR, True)
-    _plot_top_freq_values(df, df_str, CITY_COL, [3, 2, 3], CITY_STR)
-    _plot_top_freq_values(df, df_str, CITY_COL, [3, 2, 4], CITY_STR, True)
-    _plot_top_freq_values(df, df_str, genre_col, [3, 2, 5], GENRE_STR)
-    _plot_top_freq_values(df, df_str, genre_col, [3, 2, 6], GENRE_STR, True)
+def plot_top_genres_cities(
+    df: pd.DataFrame, df_str: str, genre_col: str, plot_mode: str = "all"
+):
+    if plot_mode not in ("all", "city", "genre"):
+        raise ValueError("plot_mode must be 'all' or 'city' or 'genre'")
+
+    plots = [
+        (CITY_REGION_COL, CITY_REGION_STR, False),
+        (CITY_REGION_COL, CITY_REGION_STR, True),
+        (CITY_COL, CITY_STR, False),
+        (CITY_COL, CITY_STR, True),
+        (genre_col, GENRE_STR, False),
+        (genre_col, GENRE_STR, True),
+    ]
+    if plot_mode == "all":
+        n_rows = 3
+    else:
+        n_rows = 1
+        plots = plots[2:4] if plot_mode == "city" else plots[4:]
+
+    fig, axes = plt.subplots(n_rows, 2, figsize=(12, n_rows * 4))
+
+    for ax, (col, name, asc) in zip(axes.flatten(), plots):
+        _plot_top_freq_val(df, df_str, col, ax, name, asc)
 
     plt.tight_layout()
+    plt.show()
 
 
 def plot_top_values_by_col(

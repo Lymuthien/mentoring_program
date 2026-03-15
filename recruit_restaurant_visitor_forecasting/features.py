@@ -1,5 +1,7 @@
 import numpy as np
 import pandas as pd
+from sklearn.neighbors import BallTree
+
 from recruit_restaurant_visitor_forecasting.config import (
     AIR_RESTAURANT_ID_COL,
     DAY_COL,
@@ -23,6 +25,9 @@ from recruit_restaurant_visitor_forecasting.config import (
     WEEK_COL,
     YEAR_COL,
     YEAR_MONTH_COL,
+    CITY_COL,
+    LATITUDE_COL,
+    LONGITUDE_COL,
 )
 from recruit_restaurant_visitor_forecasting.feature_names import (
     weekday_opened,
@@ -674,3 +679,24 @@ def fill_air_res_gaps(
     air_filtered = air_filtered.sort_values([AIR_RESTAURANT_ID_COL, VISIT_DATE_COL])
 
     return air_filtered
+
+
+def fill_city_by_nearest(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+
+    known = df[df[CITY_COL] != "None"]
+    unknown = df[df[CITY_COL] == "None"]
+
+    if len(unknown) == 0:
+        return df
+
+    known_coords = np.radians(known[[LATITUDE_COL, LONGITUDE_COL]].values)
+    unknown_coords = np.radians(unknown[[LATITUDE_COL, LONGITUDE_COL]].values)
+
+    tree = BallTree(known_coords, metric='haversine')
+
+    _, ind = tree.query(unknown_coords, k=1)
+    nearest_cities = known.iloc[ind.flatten()][CITY_COL].values
+    df.loc[unknown.index, CITY_COL] = nearest_cities
+
+    return df
