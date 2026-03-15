@@ -19,8 +19,8 @@ from recruit_restaurant_visitor_forecasting.config import (
     RESERVE_HPG_COL,
     RESERVE_HPG_NBR_COL,
     RESERVE_VISITORS_COL,
-    TOTAL_RESERVES_COL,
-    TOTAL_RESERVES_NBR_COL,
+    TOTAL_RES_COL,
+    TOTAL_RES_NBR_COL,
     VISIT_DATE_COL,
     WEEK_COL,
     YEAR_COL,
@@ -363,7 +363,7 @@ def add_total_reserves(
     )
     cols = [RESERVE_AIR_COL, RESERVE_HPG_COL, RESERVE_AIR_NBR_COL]
     df[cols] = df[cols].fillna(0)
-    df[TOTAL_RESERVES_COL] = df[RESERVE_AIR_COL] + df[RESERVE_HPG_COL]
+    df[TOTAL_RES_COL] = df[RESERVE_AIR_COL] + df[RESERVE_HPG_COL]
     df.drop([RESERVE_AIR_COL, RESERVE_HPG_COL], axis=1, inplace=True)
 
     return df
@@ -383,7 +383,7 @@ def add_total_nbr_reserves(
 
     df[RESERVE_HPG_NBR_COL] = df[RESERVE_HPG_NBR_COL].fillna(df["temp"])
     df = df.drop("temp", axis=1)
-    df[TOTAL_RESERVES_NBR_COL] = df[RESERVE_HPG_NBR_COL] + df[RESERVE_AIR_NBR_COL]
+    df[TOTAL_RES_NBR_COL] = df[RESERVE_HPG_NBR_COL] + df[RESERVE_AIR_NBR_COL]
     df = df.drop([RESERVE_HPG_NBR_COL, RESERVE_AIR_NBR_COL], axis=1)
 
     return df

@@ -9,9 +9,9 @@ from recruit_restaurant_visitor_forecasting.config import (
     VISITORS_COL,
     VISITORS_NBR_COL,
     CITY_COL,
-    TOTAL_RESERVES_COL,
+    TOTAL_RES_COL,
     RES_VISITORS_DIFF_COL,
-    TOTAL_RESERVES_NBR_COL,
+    TOTAL_RES_NBR_COL,
     RES_VISITORS_DIFF_NBR_COL,
 )
 from recruit_restaurant_visitor_forecasting.features import (
@@ -91,10 +91,10 @@ def update_features_for_date(
     df[last_month] = df[last_month].fillna(old_df[last_month]).fillna(df[lag_28])
 
     df = add_reserves_difference(
-        df, VISITORS_COL, TOTAL_RESERVES_COL, RES_VISITORS_DIFF_COL
+        df, VISITORS_COL, TOTAL_RES_COL, RES_VISITORS_DIFF_COL
     )
     df = add_reserves_difference(
-        df, VISITORS_NBR_COL, TOTAL_RESERVES_NBR_COL, RES_VISITORS_DIFF_NBR_COL
+        df, VISITORS_NBR_COL, TOTAL_RES_NBR_COL, RES_VISITORS_DIFF_NBR_COL
     )
 
     aggs = [("mean", {})]
