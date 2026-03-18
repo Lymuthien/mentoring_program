@@ -519,3 +519,17 @@ def plot_errors_boxplot(
     plt.xticks(rotation=45)
     plt.title(f"Error by {group_col} - Box Plot")
     plt.tight_layout()
+
+
+def plot_corr_matrix(corr_df: pd.DataFrame):
+    fig = px.imshow(
+        corr_df,
+        labels=dict(x="feature", y="feature", color="corr"),
+        x=corr_df.columns,
+        y=corr_df.columns,
+        color_continuous_scale="RdBu",
+        zmin=-1,
+        zmax=1
+    )
+    fig.update_layout(width=900, height=800)
+    fig.show()

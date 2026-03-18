@@ -37,6 +37,8 @@ from recruit_restaurant_visitor_forecasting.feature_names import (
     agg_window_col,
 )
 
+pd.set_option("mode.copy_on_write", True)
+
 SCALE_COL = "scale"
 AVG_SCALE_COL = "avg_scale"
 EST_AIR_RES_COL = "estimated_air_reserve"
