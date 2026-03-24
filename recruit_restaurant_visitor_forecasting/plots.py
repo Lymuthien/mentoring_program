@@ -132,7 +132,7 @@ def _subplot_visitors_hist(df: pd.Series, subplot: list, df_str: str) -> None:
     plt.grid(True, alpha=0.3)
 
 
-def _subplot_reservations_count(df: pd.Series, subplot: list, df_str: str) -> None:
+def _subplot_reservations_count(df: pd.DataFrame, subplot: list, df_str: str) -> None:
     plt.subplot(*subplot)
     df.plot()
     plt.title(f"{df_str} - Count of reservations by visit date - Time plot")
@@ -531,7 +531,7 @@ def plot_corr_matrix(corr_df: pd.DataFrame):
         y=corr_df.columns,
         color_continuous_scale="RdBu",
         zmin=-1,
-        zmax=1
+        zmax=1,
     )
     fig.update_layout(width=900, height=800)
     fig.show()
@@ -539,7 +539,7 @@ def plot_corr_matrix(corr_df: pd.DataFrame):
 
 def plot_vis_res_rel(visitors: pd.Series, reservations: pd.Series):
     plt.scatter(reservations, visitors, alpha=0.3, s=10)
-    plt.title('Relationship between Visitors and Reservations')
-    plt.xlabel('Reservations')
-    plt.ylabel('Visitors')
+    plt.title("Relationship between Visitors and Reservations")
+    plt.xlabel("Reservations")
+    plt.ylabel("Visitors")
     plt.show()
