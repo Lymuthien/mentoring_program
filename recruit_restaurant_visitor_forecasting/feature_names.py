@@ -1,4 +1,4 @@
-from src.config.features import NBRS_SUFFIX
+from recruit_restaurant_visitor_forecasting.config.features import NBRS_SUFFIX
 
 def weekday_opened(day: str) -> str:
     return f"{day}_open"

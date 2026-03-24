@@ -9,7 +9,7 @@ import pandas as pd
 from matplotlib.gridspec import GridSpec
 from statsmodels.graphics.tsaplots import plot_acf as plot_acf_
 
-from src.config.config import (
+from recruit_restaurant_visitor_forecasting.config.config import (
     LATITUDE_COL,
     LONGITUDE_COL,
     VISIT_DATE_COL,
@@ -18,7 +18,7 @@ from src.config.config import (
     RESERVE_VISITORS_COL,
     AIR_RESTAURANT_ID_COL,
 )
-from src.config.features import (
+from recruit_restaurant_visitor_forecasting.config.features import (
     DAY_OF_WEEK_COL,
     DAY_STR_COL,
     MONTH_COL,
@@ -27,7 +27,7 @@ from src.config.features import (
     CITY_COL,
     CITY_REGION_COL,
 )
-from src.utils import (
+from recruit_restaurant_visitor_forecasting.utils import (
     calc_errors,
     calc_daily_errors_by_group,
     calc_daily_errors,
@@ -535,3 +535,11 @@ def plot_corr_matrix(corr_df: pd.DataFrame):
     )
     fig.update_layout(width=900, height=800)
     fig.show()
+
+
+def plot_vis_res_rel(visitors: pd.Series, reservations: pd.Series):
+    plt.scatter(reservations, visitors, alpha=0.3, s=10)
+    plt.title('Relationship between Visitors and Reservations')
+    plt.xlabel('Reservations')
+    plt.ylabel('Visitors')
+    plt.show()

@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from sklearn.neighbors import BallTree
 
-from src.config.config import (
+from recruit_restaurant_visitor_forecasting.config.config import (
     AIR_RESTAURANT_ID_COL,
     HOLIDAY_COL,
     HPG_RESTAURANT_ID_COL,
@@ -11,7 +11,7 @@ from src.config.config import (
     LATITUDE_COL,
     LONGITUDE_COL,
 )
-from src.config.features import (
+from recruit_restaurant_visitor_forecasting.config.features import (
     TOTAL_RES_COL,
     TOTAL_RES_NBR_COL,
     RESERVE_AIR_COL,
@@ -35,7 +35,7 @@ from src.config.features import (
     OPEN_USUALLY_COL,
     OPENED_RECENTLY_FLG,
 )
-from src.feature_names import (
+from recruit_restaurant_visitor_forecasting.feature_names import (
     weekday_opened,
     nbrs_col,
     last_month_col,

@@ -1,7 +1,7 @@
 import pandas as pd
 
-from src.config.config import AIR_RESTAURANT_ID_COL, VISIT_DATE_COL
-from src.config.features import (
+from recruit_restaurant_visitor_forecasting.config.config import AIR_RESTAURANT_ID_COL, VISIT_DATE_COL
+from recruit_restaurant_visitor_forecasting.config.features import (
     VISITORS_NBR_COL,
     GOLDEN_WEEK_FLG,
     DAY_OF_WEEK_COL,

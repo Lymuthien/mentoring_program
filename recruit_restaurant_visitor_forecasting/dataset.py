@@ -1,5 +1,5 @@
 import pandas as pd
-from src.config.config import RESERVE_DATETIME_COL, VISIT_DATE_COL, VISIT_DATETIME_COL
+from recruit_restaurant_visitor_forecasting.config.config import RESERVE_DATETIME_COL, VISIT_DATE_COL, VISIT_DATETIME_COL
 
 
 def standardize_date(df: pd.DataFrame, col: str):

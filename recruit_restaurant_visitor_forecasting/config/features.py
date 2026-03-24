@@ -1,4 +1,4 @@
-from src.config.config import VISITORS_COL
+from recruit_restaurant_visitor_forecasting.config.config import VISITORS_COL
 
 # Seasonal columns
 
