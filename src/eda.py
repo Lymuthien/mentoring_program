@@ -1,5 +1,4 @@
 from IPython.display import display
-
 import pandas as pd
 
 type DatasetInfo = tuple[pd.DataFrame, str, str]

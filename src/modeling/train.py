@@ -2,26 +2,25 @@ import numpy as np
 import optuna
 import pandas as pd
 import shap
-import mlflow
 from optuna.samplers import TPESampler
 from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
 from typing import Optional, Union
 
-from recruit_restaurant_visitor_forecasting.config import (
+from src.config.config import (
     AIR_RESTAURANT_ID_COL,
     VISIT_DATE_COL,
     PROCESSED_DATA_DIR
 )
-from recruit_restaurant_visitor_forecasting.modeling.cv import (
+from src.modeling.cv import (
     ExpandingWindowSplit,
     cv_recursive_score,
 )
-from recruit_restaurant_visitor_forecasting.modeling.pipeline import (
+from src.modeling.pipeline import (
     build_lgbm_pipeline,
     build_ridge_pipeline,
 )
-from recruit_restaurant_visitor_forecasting.utils import rmsle
+from src.utils import rmsle
 
 
 def load_data() -> tuple:

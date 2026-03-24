@@ -1,0 +1,16 @@
+CV_SPLITS = 5
+TEST_SIZE = 0.2
+
+# SHAP Feature selection
+
+FS_TOP_K = 35
+FS_VALID_SIZE = 0.2
+
+# LightGBM
+
+OBJECTIVE_FUNCTION = "huber"
+
+# Optuna
+
+FIRST_ITER_TRIALS = 40
+SECOND_ITER_TRIALS = 200

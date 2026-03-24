@@ -3,8 +3,8 @@ import pandas as pd
 
 from sklearn.base import clone
 from joblib import Parallel, delayed
-from recruit_restaurant_visitor_forecasting.config import DROP_COLUMNS
-from recruit_restaurant_visitor_forecasting.modeling.predict import recursive_predict
+from src.config.preprocessing import DROP_COLUMNS
+from src.modeling.predict import recursive_predict
 
 
 class ExpandingWindowSplit:

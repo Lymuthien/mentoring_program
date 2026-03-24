@@ -4,19 +4,21 @@ import pandas as pd
 import statsmodels.api as sm
 from sklearn.metrics import mean_squared_log_error
 
-from recruit_restaurant_visitor_forecasting.config import (
-    AIR_DAILY_COL,
-    HPG_DAILY_COL,
+from src.config.config import (
     HPG_RESTAURANT_ID_COL,
     VISIT_DATE_COL,
-    ACTUAL_MEAN,
-    PRED_MEAN,
     VISITORS_COL,
     AIR_RESTAURANT_ID_COL,
-    CITY_COL,
     AIR_GENRE_COL,
 )
-from recruit_restaurant_visitor_forecasting.features import add_sum_of_reserves
+from src.config.features import (
+    CITY_COL,
+    AIR_DAILY_COL,
+    HPG_DAILY_COL,
+    ACTUAL_MEAN,
+    PRED_MEAN,
+)
+from src.features import add_sum_of_reserves
 
 MEAN_ERROR = "mean_error"
 STD_ERROR = "std_error"

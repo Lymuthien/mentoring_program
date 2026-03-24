@@ -3,10 +3,12 @@ import pandas as pd
 from sklearn.pipeline import Pipeline
 from tqdm import tqdm
 
-from recruit_restaurant_visitor_forecasting.config import (
+from src.config.config import (
     AIR_RESTAURANT_ID_COL,
     VISIT_DATE_COL,
     VISITORS_COL,
+)
+from src.config.features import (
     VISITORS_NBR_COL,
     CITY_COL,
     TOTAL_RES_COL,
@@ -14,14 +16,14 @@ from recruit_restaurant_visitor_forecasting.config import (
     TOTAL_RES_NBR_COL,
     RES_VISITORS_DIFF_NBR_COL,
 )
-from recruit_restaurant_visitor_forecasting.features import (
+from src.features import (
     add_lags,
     add_basic_stats,
     add_neighbors_stats,
     add_last_month_visitors,
     add_reserves_difference,
 )
-from recruit_restaurant_visitor_forecasting.feature_names import (
+from src.feature_names import (
     lag_col,
     last_month_col,
     nbrs_col,

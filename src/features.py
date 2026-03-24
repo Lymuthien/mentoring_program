@@ -2,34 +2,40 @@ import numpy as np
 import pandas as pd
 from sklearn.neighbors import BallTree
 
-from recruit_restaurant_visitor_forecasting.config import (
+from src.config.config import (
     AIR_RESTAURANT_ID_COL,
-    DAY_COL,
-    DAY_OF_WEEK_COL,
-    DAY_STR_COL,
-    DAYS_FROM_HOL_COL,
-    DAYS_OF_WEEK,
     HOLIDAY_COL,
     HPG_RESTAURANT_ID_COL,
-    MONTH_COL,
-    OPEN_DATE_COL,
-    PERCENTAGE_COL,
+    RESERVE_VISITORS_COL,
+    VISIT_DATE_COL,
+    LATITUDE_COL,
+    LONGITUDE_COL,
+)
+from src.config.features import (
+    TOTAL_RES_COL,
+    TOTAL_RES_NBR_COL,
     RESERVE_AIR_COL,
     RESERVE_AIR_NBR_COL,
     RESERVE_HPG_COL,
     RESERVE_HPG_NBR_COL,
-    RESERVE_VISITORS_COL,
-    TOTAL_RES_COL,
-    TOTAL_RES_NBR_COL,
-    VISIT_DATE_COL,
-    WEEK_COL,
+    GOLDEN_WEEK_FLG,
+    DAYS_FROM_HOL_COL,
+    DAYS_OF_WEEK,
     YEAR_COL,
     YEAR_MONTH_COL,
+    MONTH_COL,
+    OPEN_DATE_COL,
+    PERCENTAGE_COL,
+    DAY_COL,
+    DAY_OF_WEEK_COL,
+    DAY_STR_COL,
+    WEEK_COL,
     CITY_COL,
-    LATITUDE_COL,
-    LONGITUDE_COL,
+    DAYS_FROM_LAST_VISIT_COL,
+    OPEN_USUALLY_COL,
+    OPENED_RECENTLY_FLG,
 )
-from recruit_restaurant_visitor_forecasting.feature_names import (
+from src.feature_names import (
     weekday_opened,
     nbrs_col,
     last_month_col,
@@ -40,17 +46,13 @@ from recruit_restaurant_visitor_forecasting.feature_names import (
 pd.set_option("mode.copy_on_write", True)
 
 SCALE_COL = "scale"
-AVG_SCALE_COL = "avg_scale"
-EST_AIR_RES_COL = "estimated_air_reserve"
-GOLDEN_WEEK_FLG = "golden_week_flg"
-OPENED_RECENTLY_FLG = "opened_recently"
-DAYS_FROM_LAST_VISIT_COL = "days_from_last_visit"
-OPEN_USUALLY_COL = "open_usually"
+AVG_SCALE = "avg_scale"
+EST_AIR_RES = "estimated_air_reserve"
 CUM_SUM = "cum_sum"
 CUM_CNT = "cum_count"
 G_MEAN = "global_mean"
 IS_CURRENT_DF = "_is_current"
-LOOKUP_DATE_COL = "_last_month_date"
+LOOKUP_DATE = "_last_month_date"
 
 
 def get_first_str_values(s: pd.Series, n: int, sep: str = " ") -> pd.Series:
@@ -486,13 +488,13 @@ def add_last_month_visitors(
     df = df.copy()
     ref_df = df if reference_df is None else reference_df
 
-    df[LOOKUP_DATE_COL] = df[VISIT_DATE_COL] - pd.DateOffset(months=1)
+    df[LOOKUP_DATE] = df[VISIT_DATE_COL] - pd.DateOffset(months=1)
     lookup = ref_df[[AIR_RESTAURANT_ID_COL, VISIT_DATE_COL, target_col]].rename(
-        columns={VISIT_DATE_COL: LOOKUP_DATE_COL, target_col: feature_col}
+        columns={VISIT_DATE_COL: LOOKUP_DATE, target_col: feature_col}
     )
 
-    df = df.merge(lookup, on=[AIR_RESTAURANT_ID_COL, LOOKUP_DATE_COL], how="left")
-    df.drop(columns=LOOKUP_DATE_COL, inplace=True)
+    df = df.merge(lookup, on=[AIR_RESTAURANT_ID_COL, LOOKUP_DATE], how="left")
+    df.drop(columns=LOOKUP_DATE, inplace=True)
 
     return df
 
@@ -585,7 +587,7 @@ def calc_air_hpg_scale(
     scaling_factors = (
         merged.groupby(AIR_RESTAURANT_ID_COL)[SCALE_COL]
         .mean()
-        .rename(AVG_SCALE_COL)
+        .rename(AVG_SCALE)
         .reset_index()
     )
     overall_median = merged[SCALE_COL].median()
@@ -625,14 +627,14 @@ def fill_air_res_without_hpg(
     all_combos = all_combos.merge(
         air_daily_non_gap, on=[AIR_RESTAURANT_ID_COL, DAY_OF_WEEK_COL], how="left"
     )
-    all_combos[EST_AIR_RES_COL] = (
+    all_combos[EST_AIR_RES] = (
         all_combos["dow_avg_reserve"].fillna(overall_avg).round().astype(int)
     )
 
     estimated_air_rows = pd.DataFrame(
         {
             AIR_RESTAURANT_ID_COL: all_combos[AIR_RESTAURANT_ID_COL],
-            RESERVE_VISITORS_COL: all_combos[EST_AIR_RES_COL],
+            RESERVE_VISITORS_COL: all_combos[EST_AIR_RES],
             VISIT_DATE_COL: all_combos[VISIT_DATE_COL],
         }
     )
@@ -651,9 +653,9 @@ def fill_air_res_gaps(
     hpg_gap_scaled = hpg_gap_daily.merge(
         scaling_factors, on=AIR_RESTAURANT_ID_COL, how="left"
     )
-    hpg_gap_scaled[AVG_SCALE_COL] = hpg_gap_scaled[AVG_SCALE_COL].fillna(overall_median)
-    hpg_gap_scaled[EST_AIR_RES_COL] = (
-        (hpg_gap_scaled[RESERVE_VISITORS_COL] * hpg_gap_scaled[AVG_SCALE_COL])
+    hpg_gap_scaled[AVG_SCALE] = hpg_gap_scaled[AVG_SCALE].fillna(overall_median)
+    hpg_gap_scaled[EST_AIR_RES] = (
+        (hpg_gap_scaled[RESERVE_VISITORS_COL] * hpg_gap_scaled[AVG_SCALE])
         .round()
         .astype(int)
     )
@@ -661,7 +663,7 @@ def fill_air_res_gaps(
     estimated_air_rows_hpg = pd.DataFrame(
         {
             AIR_RESTAURANT_ID_COL: hpg_gap_scaled[AIR_RESTAURANT_ID_COL],
-            RESERVE_VISITORS_COL: hpg_gap_scaled[EST_AIR_RES_COL],
+            RESERVE_VISITORS_COL: hpg_gap_scaled[EST_AIR_RES],
             VISIT_DATE_COL: hpg_gap_scaled[VISIT_DATE_COL],
         }
     )
