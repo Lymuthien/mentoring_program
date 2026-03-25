@@ -55,3 +55,5 @@ PRED_MEAN = "predicted_mean"
 
 CITY_DIV_N = 1
 CITY_REGION_DIV_N = 2
+CITY_CLUSTERS_RANGE = range(3, 7)
+

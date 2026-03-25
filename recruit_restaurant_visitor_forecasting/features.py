@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from sklearn.cluster import KMeans
 from sklearn.neighbors import BallTree
 
 from recruit_restaurant_visitor_forecasting.config.config import (
@@ -53,6 +54,7 @@ CUM_CNT = "cum_count"
 G_MEAN = "global_mean"
 IS_CURRENT_DF = "_is_current"
 LOOKUP_DATE = "_last_month_date"
+N_RESTAURANTS = "n_restaurants"
 
 
 def get_first_str_values(s: pd.Series, n: int, sep: str = " ") -> pd.Series:
@@ -697,5 +699,58 @@ def fill_city_by_nearest(df: pd.DataFrame, none_val: str = "None") -> pd.DataFra
     _, ind = tree.query(unknown_coords, k=1)
     nearest_cities = known.iloc[ind.flatten()][CITY_COL].values
     df.loc[unknown.index, CITY_COL] = nearest_cities
+
+    return df
+
+
+def _prepare_before_cluster(df: pd.DataFrame) -> tuple[np.ndarray, pd.DataFrame]:
+    cities = df.groupby(CITY_COL, as_index=False).agg(
+        **{
+            LATITUDE_COL: (LATITUDE_COL, "mean"),
+            LONGITUDE_COL: (LONGITUDE_COL, "mean"),
+            N_RESTAURANTS: (CITY_COL, "size"),
+        }
+    )
+
+    lat0 = np.deg2rad(cities[LATITUDE_COL].mean())
+    X = np.column_stack(
+        [
+            cities[LONGITUDE_COL].to_numpy() * np.cos(lat0),
+            cities[LATITUDE_COL].to_numpy(),
+        ]
+    )
+
+    return X, cities
+
+
+def get_inertia(df: pd.DataFrame, ks, random_state: int = 42) -> pd.DataFrame:
+    X, cities = _prepare_before_cluster(df)
+
+    inertia = []
+    for k in ks:
+        model = KMeans(n_clusters=k, random_state=random_state, n_init=20)
+        model.fit_predict(X, sample_weight=cities[N_RESTAURANTS])
+        inertia.append({"k": k, "inertia": model.inertia_})
+
+    return pd.DataFrame(inertia).set_index("k")
+
+
+def cluster_cities(df: pd.DataFrame, k: int, random_state: int = 42) -> pd.DataFrame:
+    X, cities = _prepare_before_cluster(df)
+
+    model = KMeans(n_clusters=k, random_state=random_state, n_init=20)
+    cities["cluster_id"] = model.fit_predict(X, sample_weight=cities[N_RESTAURANTS])
+
+    cluster_names = (
+        cities.sort_values(N_RESTAURANTS, ascending=False)
+        .groupby("cluster_id")[CITY_COL]
+        .first()
+        .to_dict()
+    )
+    cities["cluster_name"] = cities["cluster_id"].map(cluster_names)
+
+    city_to_cluster = cities.set_index(CITY_COL)["cluster_name"].to_dict()
+    df = df.copy()
+    df[CITY_COL] = df[CITY_COL].map(city_to_cluster)
 
     return df
