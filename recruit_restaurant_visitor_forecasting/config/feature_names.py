@@ -12,5 +12,5 @@ def last_month_col(col: str) -> str:
 def lag_col(col: str, lag: int) -> str:
     return f"{col}_lag_{lag}"
 
-def agg_window_col(col: str, agg: str, window: str) -> str:
+def agg_window_col(col: str, agg: str, window: int | str) -> str:
     return f"{col}_{agg}_{window}"

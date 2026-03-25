@@ -10,24 +10,13 @@ from recruit_restaurant_visitor_forecasting.config.features import (
     OPENED_RECENTLY_FLG,
     DAYS_FROM_LAST_VISIT_COL,
 )
+from recruit_restaurant_visitor_forecasting.config.feature_names import agg_window_col
 
 DROP_FEATURES = [
-    *[
-        VISITORS_NBR_COL + suffix
-        for suffix in [
-            "_mean_7",
-            "_mean_14",
-            "_mean_28",
-            "_median_7",
-            "_median_28",
-            "_std_7",
-            "_std_14",
-        ]
-    ],
-    *[
-        RES_VISITORS_DIFF_NBR_COL + suffix
-        for suffix in ["_mean_7", "_mean_14", "_mean_28"]
-    ],
+    *[agg_window_col(VISITORS_NBR_COL, "mean", n) for n in [7, 14, 28]],
+    *[agg_window_col(VISITORS_NBR_COL, "median", n) for n in [7, 28]],
+    *[agg_window_col(VISITORS_NBR_COL, "std", n) for n in [7, 14]],
+    *[agg_window_col(RES_VISITORS_DIFF_NBR_COL, "mean", n) for n in [7, 14, 28]],
     RES_VISITORS_DIFF_NBR_COL,
     GOLDEN_WEEK_FLG,
     OPENED_RECENTLY_FLG,

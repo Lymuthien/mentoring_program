@@ -35,8 +35,11 @@ from recruit_restaurant_visitor_forecasting.config.features import (
     DAYS_FROM_LAST_VISIT_COL,
     OPEN_USUALLY_COL,
     OPENED_RECENTLY_FLG,
+    MEAN_PREF,
+    MEDIAN_PREF,
+    STD_PREF,
 )
-from recruit_restaurant_visitor_forecasting.feature_names import (
+from recruit_restaurant_visitor_forecasting.config.feature_names import (
     weekday_opened,
     nbrs_col,
     last_month_col,
@@ -420,9 +423,9 @@ def add_basic_stats(
 
     if aggs is None:
         aggs = [
-            ("mean", {}),
-            ("median", {}),
-            ("std", {"ddof": 0}),
+            (MEAN_PREF, {}),
+            (MEDIAN_PREF, {}),
+            (STD_PREF, {"ddof": 0}),
         ]
 
     df = df.sort_values([id_col, VISIT_DATE_COL])

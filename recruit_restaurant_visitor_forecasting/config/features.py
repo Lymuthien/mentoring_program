@@ -19,6 +19,12 @@ GENRE_TE = "air_genre_te"
 AREA_TE = "air_city_te"
 
 NBRS_SUFFIX = "_nbrs"
+MEAN_PREF= "mean"
+MEDIAN_PREF = "median"
+STD_PREF = "std"
+MAX_PREF = "max"
+MIN_PREF = "min"
+
 PERCENTAGE_COL = "percentage"
 GOLDEN_WEEK_FLG = "golden_week_flg"
 CITY_COL = "city"

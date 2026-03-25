@@ -18,6 +18,7 @@ from recruit_restaurant_visitor_forecasting.config.config import (
     RESERVE_VISITORS_COL,
     AIR_RESTAURANT_ID_COL,
 )
+from recruit_restaurant_visitor_forecasting.config.feature_names import agg_window_col
 from recruit_restaurant_visitor_forecasting.config.features import (
     DAY_OF_WEEK_COL,
     DAY_STR_COL,
@@ -543,3 +544,21 @@ def plot_vis_res_rel(visitors: pd.Series, reservations: pd.Series):
     plt.xlabel("Reservations")
     plt.ylabel("Visitors")
     plt.show()
+
+
+def plot_agg_pairs_rel(pairs: list | tuple, sample: pd.DataFrame):
+    n_cols = 2
+    n_rows = int(np.ceil(len(pairs) / n_cols))
+    fig, ax = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(10, 8))
+    axs = ax.flatten()
+
+    for ax, pair in zip(axs, pairs):
+        x, y = pair
+        sample.plot.scatter(
+            x=agg_window_col(VISITORS_COL, *x),
+            y=agg_window_col(VISITORS_COL, *y),
+            alpha=0.5,
+            ax=ax,
+        )
+
+    plt.tight_layout()

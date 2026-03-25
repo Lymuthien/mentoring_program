@@ -15,6 +15,11 @@ from recruit_restaurant_visitor_forecasting.config.features import (
     RES_VISITORS_DIFF_COL,
     TOTAL_RES_NBR_COL,
     RES_VISITORS_DIFF_NBR_COL,
+    MEAN_PREF,
+    MEDIAN_PREF,
+    STD_PREF,
+    MAX_PREF,
+    MIN_PREF,
 )
 from recruit_restaurant_visitor_forecasting.features import (
     add_lags,
@@ -23,7 +28,7 @@ from recruit_restaurant_visitor_forecasting.features import (
     add_last_month_visitors,
     add_reserves_difference,
 )
-from recruit_restaurant_visitor_forecasting.feature_names import (
+from recruit_restaurant_visitor_forecasting.config.feature_names import (
     lag_col,
     last_month_col,
     nbrs_col,
@@ -71,11 +76,11 @@ def update_features_for_date(
     original_cols = set(df.columns)
 
     aggs = [
-        ("mean", {}),
-        ("median", {}),
-        ("std", {"ddof": 0}),
-        ("max", {}),
-        ("min", {}),
+        (MEAN_PREF, {}),
+        (MEDIAN_PREF, {}),
+        (STD_PREF, {"ddof": 0}),
+        (MAX_PREF, {}),
+        (MIN_PREF, {}),
     ]
     df = add_basic_stats(df, VISITORS_COL, id_col, aggs=aggs)
     df = add_neighbors_stats(df, VISITORS_COL, CITY_COL)
@@ -99,7 +104,7 @@ def update_features_for_date(
         df, VISITORS_NBR_COL, TOTAL_RES_NBR_COL, RES_VISITORS_DIFF_NBR_COL
     )
 
-    aggs = [("mean", {})]
+    aggs = [(MEAN_PREF, {})]
     df = add_basic_stats(df, RES_VISITORS_DIFF_COL, id_col, aggs)
     df = add_neighbors_stats(df, RES_VISITORS_DIFF_NBR_COL, CITY_COL, aggs, False)
 
