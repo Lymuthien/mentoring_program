@@ -38,6 +38,7 @@ from recruit_restaurant_visitor_forecasting.config.features import (
     MEAN_PREF,
     MEDIAN_PREF,
     STD_PREF,
+    RES_IMPOSSIBILITY_COL,
 )
 from recruit_restaurant_visitor_forecasting.config.feature_names import (
     weekday_opened,
@@ -359,10 +360,7 @@ def add_nbrs_reserves(
 
 
 def add_total_reserves(
-    df: pd.DataFrame,
-    air_res: pd.DataFrame,
-    hpg_res: pd.DataFrame,
-    region_col: str,
+    df: pd.DataFrame, air_res: pd.DataFrame, hpg_res: pd.DataFrame, region_col: str
 ) -> pd.DataFrame:
     merge_columns = [AIR_RESTAURANT_ID_COL, VISIT_DATE_COL, region_col]
     df = (
@@ -755,5 +753,15 @@ def cluster_cities(df: pd.DataFrame, k: int, random_state: int = 42) -> pd.DataF
     city_to_cluster = cities.set_index(CITY_COL)["cluster_name"].to_dict()
     df = df.copy()
     df[CITY_COL] = df[CITY_COL].map(city_to_cluster)
+
+    return df
+
+
+def add_reservation_impossibility(df: pd.DataFrame, res: pd.DataFrame) -> pd.DataFrame:
+    ID_COL = AIR_RESTAURANT_ID_COL
+    df = df.copy()
+    df[RES_IMPOSSIBILITY_COL] = 0
+    missing_mask = ~df[ID_COL].isin(res[ID_COL])
+    df.loc[missing_mask, RES_IMPOSSIBILITY_COL] = 1
 
     return df

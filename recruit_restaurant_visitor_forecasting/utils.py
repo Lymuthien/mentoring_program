@@ -237,3 +237,10 @@ def get_daily_error_stats_table(
 
     group_table = pd.DataFrame(rows)
     return group_table
+
+
+def get_pairs_by_corr(df: pd.DataFrame, threshold: float) -> pd.Series:
+    mask = np.triu(np.ones_like(df, dtype=bool), k=1)
+    corr_pairs = df.where(mask).stack()
+
+    return corr_pairs[corr_pairs.abs() > threshold].rename("correlation")

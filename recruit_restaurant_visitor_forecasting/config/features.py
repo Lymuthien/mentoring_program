@@ -52,6 +52,7 @@ TOTAL_RES_COL = "total_reservations"
 TOTAL_RES_NBR_COL = TOTAL_RES_COL + NBRS_SUFFIX
 RES_VISITORS_DIFF_COL = "res_visitors_diff"
 RES_VISITORS_DIFF_NBR_COL = "nbr_res_visitors_diff"
+RES_IMPOSSIBILITY_COL = "reservation_impossibility_flag"
 
 
 DAYS_OF_WEEK = ["Mon", "Tue", "Wed", "Th", "Fri", "Sat", "Sun"]
