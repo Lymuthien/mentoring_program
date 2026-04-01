@@ -538,27 +538,13 @@ def plot_corr_matrix(corr_df: pd.DataFrame, max_abs: float = 1):
     fig.show()
 
 
-def plot_vis_res_rel(visitors: pd.Series, reservations: pd.Series):
-    plt.scatter(reservations, visitors, alpha=0.3, s=10)
-    plt.title("Relationship between Visitors and Reservations")
-    plt.xlabel("Reservations")
-    plt.ylabel("Visitors")
-    plt.show()
-
-
-def plot_agg_pairs_rel(pairs: list | tuple, sample: pd.DataFrame):
+def plot_pairs_rel(pairs: list | tuple, df: pd.DataFrame):
     n_cols = 2
     n_rows = int(np.ceil(len(pairs) / n_cols))
-    fig, ax = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(10, 8))
+    fig, ax = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(10, n_rows * 3))
     axs = ax.flatten()
 
     for ax, pair in zip(axs, pairs):
-        x, y = pair
-        sample.plot.scatter(
-            x=agg_window_col(VISITORS_COL, *x),
-            y=agg_window_col(VISITORS_COL, *y),
-            alpha=0.5,
-            ax=ax,
-        )
+        df.plot.scatter(x=pair[0], y=pair[1], alpha=0.5, ax=ax)
 
     plt.tight_layout()
