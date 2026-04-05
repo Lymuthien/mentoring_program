@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.neighbors import BallTree
+from statsmodels.stats.outliers_influence import variance_inflation_factor as vif
 
 from recruit_restaurant_visitor_forecasting.config.config import (
     AIR_RESTAURANT_ID_COL,
@@ -765,3 +766,18 @@ def add_reservation_impossibility(df: pd.DataFrame, res: pd.DataFrame) -> pd.Dat
     df.loc[missing_mask, RES_IMPOSSIBILITY_COL] = 1
 
     return df
+
+
+def select_by_vif(df: pd.DataFrame, cols: list, threshold: int = 10) -> list:
+    cols = cols.copy()
+    while True:
+        X = df[cols].values
+        vifs = [vif(X, i) for i in range(len(cols))]
+
+        if max(vifs) <= threshold:
+            break
+
+        worst_idx = np.argmax(vifs)
+        cols.pop(cols[worst_idx])
+
+    return cols
