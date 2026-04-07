@@ -40,6 +40,8 @@ from recruit_restaurant_visitor_forecasting.config.features import (
     MEDIAN_PREF,
     STD_PREF,
     RES_IMPOSSIBILITY_COL,
+    AGG_WINDOWS,
+    LAGS,
 )
 from recruit_restaurant_visitor_forecasting.config.feature_names import (
     weekday_opened,
@@ -148,7 +150,7 @@ def add_seasonal_columns(df: pd.DataFrame, date_col: str) -> pd.DataFrame:
     return df
 
 
-def add_holiday_columns(df: pd.DataFrame, date_col: str):
+def add_holiday_columns(df: pd.DataFrame, date_col: str) -> pd.DataFrame:
     df = df.sort_values(date_col).reset_index(drop=True)
 
     inf = np.iinfo(np.int64).max
@@ -360,7 +362,7 @@ def add_nbrs_reserves(
     return df
 
 
-def add_total_reserves(
+def add_total_reservations(
     df: pd.DataFrame, air_res: pd.DataFrame, hpg_res: pd.DataFrame, region_col: str
 ) -> pd.DataFrame:
     merge_columns = [AIR_RESTAURANT_ID_COL, VISIT_DATE_COL, region_col]
@@ -377,7 +379,7 @@ def add_total_reserves(
     return df
 
 
-def add_total_nbr_reserves(
+def add_total_nbr_reservations(
     df: pd.DataFrame, hpg_res: pd.DataFrame, region_col: str
 ) -> pd.DataFrame:
     df = df.merge(
@@ -415,26 +417,15 @@ def add_basic_stats(
     target_col: str,
     id_col: str,
     aggs: list = None,
-    windows: list = None,
+    windows: list = AGG_WINDOWS,
 ) -> pd.DataFrame:
-    if windows is None:
-        windows = [7, 14, 28]
 
     if aggs is None:
-        aggs = [
-            (MEAN_PREF, {}),
-            (MEDIAN_PREF, {}),
-            (STD_PREF, {"ddof": 0}),
-        ]
+        aggs = [(MEAN_PREF, {}), (MEDIAN_PREF, {}), (STD_PREF, {"ddof": 0})]
 
     df = df.sort_values([id_col, VISIT_DATE_COL])
 
-    masked = prepare_masked_series(
-        df,
-        target_col,
-        OPEN_USUALLY_COL,
-        id_col,
-    )
+    masked = prepare_masked_series(df, target_col, OPEN_USUALLY_COL, id_col)
 
     grouped = masked.groupby(df[id_col])
     result = df
@@ -504,10 +495,7 @@ def add_last_month_visitors(
 
 
 def add_historical_dow_mean(
-    df: pd.DataFrame,
-    target_col: str,
-    feature_name: str,
-    test_df: pd.DataFrame,
+    df: pd.DataFrame, target_col: str, feature_name: str, test_df: pd.DataFrame
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     df = df.sort_values([AIR_RESTAURANT_ID_COL, VISIT_DATE_COL])
     grouping_keys = [AIR_RESTAURANT_ID_COL, DAY_OF_WEEK_COL]
@@ -543,8 +531,8 @@ def add_lags(
     df: pd.DataFrame,
     id_col: str,
     target_col: str,
-    lags: tuple[int, ...],
     use_nbrs: bool = False,
+    lags: list[int] = LAGS,
 ) -> pd.DataFrame:
     df = df.sort_values([id_col, VISIT_DATE_COL])
 
@@ -574,9 +562,7 @@ def drop_first_month(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def calc_air_hpg_scale(
-    air_df: pd.DataFrame,
-    hpg_df: pd.DataFrame,
-    gap_dates,
+    air_df: pd.DataFrame, hpg_df: pd.DataFrame, gap_dates
 ) -> tuple[pd.DataFrame, float]:
     air_non_gap = air_df[~air_df[VISIT_DATE_COL].isin(gap_dates)]
     hpg_non_gap = hpg_df[~hpg_df[VISIT_DATE_COL].isin(gap_dates)]
@@ -600,9 +586,7 @@ def calc_air_hpg_scale(
 
 
 def fill_air_res_without_hpg(
-    air_df: pd.DataFrame,
-    gap_dates: pd.Series,
-    ids_with_hpg: set[str],
+    air_df: pd.DataFrame, gap_dates: pd.Series, ids_with_hpg: set[str]
 ) -> pd.DataFrame:
     air_ids = set(air_df[AIR_RESTAURANT_ID_COL].unique())
     ids_without_hpg = air_ids - ids_with_hpg
@@ -758,11 +742,13 @@ def cluster_cities(df: pd.DataFrame, k: int, random_state: int = 42) -> pd.DataF
     return df
 
 
-def add_reservation_impossibility(df: pd.DataFrame, res: pd.DataFrame) -> pd.DataFrame:
+def add_reservation_impossibility(
+    df: pd.DataFrame, air_res: pd.DataFrame, hpg_res: pd.DataFrame
+) -> pd.DataFrame:
     ID_COL = AIR_RESTAURANT_ID_COL
     df = df.copy()
     df[RES_IMPOSSIBILITY_COL] = 0
-    missing_mask = ~df[ID_COL].isin(res[ID_COL])
+    missing_mask = ~df[ID_COL].isin(set(air_res[ID_COL]) | set(hpg_res[ID_COL]))
     df.loc[missing_mask, RES_IMPOSSIBILITY_COL] = 1
 
     return df
@@ -778,6 +764,6 @@ def select_by_vif(df: pd.DataFrame, cols: list, threshold: int = 10) -> list:
             break
 
         worst_idx = np.argmax(vifs)
-        cols.pop(cols[worst_idx])
+        cols.pop(worst_idx)
 
     return cols

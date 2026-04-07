@@ -61,16 +61,12 @@ def _clean_merge_columns(df: pd.DataFrame, original_cols: set) -> pd.DataFrame:
 
 
 def update_features_for_date(
-    df: pd.DataFrame,
-    current_date: pd.Timestamp,
-    lags: tuple = (1, 7, 28),
+    df: pd.DataFrame, current_date: pd.Timestamp
 ) -> pd.DataFrame:
     id_col = AIR_RESTAURANT_ID_COL
 
     start_date = current_date - pd.DateOffset(months=1)
-    df = df[
-        (df[VISIT_DATE_COL] >= start_date) & (df[VISIT_DATE_COL] <= current_date)
-    ]
+    df = df[(df[VISIT_DATE_COL] >= start_date) & (df[VISIT_DATE_COL] <= current_date)]
     old_df = df
 
     original_cols = set(df.columns)
@@ -82,24 +78,22 @@ def update_features_for_date(
         (MAX_PREF, {}),
         (MIN_PREF, {}),
     ]
-    df = add_basic_stats(df, VISITORS_COL, id_col, aggs=aggs)
+    df = add_basic_stats(df, VISITORS_COL, id_col, aggs)
     df = add_neighbors_stats(df, VISITORS_COL, CITY_COL)
 
     df = add_last_month_visitors(df, VISITORS_COL)
-    df = add_lags(df, id_col, VISITORS_COL, lags, False)
+    df = add_lags(df, id_col, VISITORS_COL, False)
     df = _clean_merge_columns(df, original_cols)
 
     last_month = last_month_col(VISITORS_COL)
     lag_28 = lag_col(VISITORS_COL, 28)
     nbrs_lag_28 = lag_col(nbrs_col(VISITORS_COL), 28)
 
-    df = add_lags(df, CITY_COL, VISITORS_NBR_COL, lags, True)
+    df = add_lags(df, CITY_COL, VISITORS_NBR_COL, True)
     df[lag_28] = df[lag_28].fillna(old_df[lag_28]).fillna(df[nbrs_lag_28])
     df[last_month] = df[last_month].fillna(old_df[last_month]).fillna(df[lag_28])
 
-    df = add_reserves_difference(
-        df, VISITORS_COL, TOTAL_RES_COL, RES_VISITORS_DIFF_COL
-    )
+    df = add_reserves_difference(df, VISITORS_COL, TOTAL_RES_COL, RES_VISITORS_DIFF_COL)
     df = add_reserves_difference(
         df, VISITORS_NBR_COL, TOTAL_RES_NBR_COL, RES_VISITORS_DIFF_NBR_COL
     )
@@ -123,9 +117,7 @@ def recursive_predict(
     id_col = AIR_RESTAURANT_ID_COL
     feature_exclude = {id_col, VISIT_DATE_COL, VISITORS_COL, *drop_cols}
 
-    combined = pd.concat(
-        [train_features, test_features], ignore_index=True
-    )
+    combined = pd.concat([train_features, test_features], ignore_index=True)
     combined[VISITORS_COL] = 0.0
     combined.loc[: len(train_features) - 1, VISITORS_COL] = train_labels.values
 
@@ -133,10 +125,7 @@ def recursive_predict(
     result = pd.Series(index=test_features.index, dtype=float)
 
     for date in tqdm(test_dates, desc="Predicting recursively"):
-        updated_features = update_features_for_date(
-            combined,
-            date,
-        )
+        updated_features = update_features_for_date(combined, date)
 
         missing_cols = updated_features.columns.difference(combined.columns)
         if not missing_cols.empty:
