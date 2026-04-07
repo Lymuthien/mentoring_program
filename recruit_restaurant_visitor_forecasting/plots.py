@@ -539,7 +539,7 @@ def plot_corr_matrix(corr_df: pd.DataFrame, max_abs: float = 1):
 
 
 def plot_pairs_rel(pairs: list | tuple, df: pd.DataFrame):
-    n_cols = 2
+    n_cols = 2 if len(pairs) != 1 else 1
     n_rows = int(np.ceil(len(pairs) / n_cols))
     fig, ax = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(10, n_rows * 3))
     axs = ax.flatten()
