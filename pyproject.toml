@@ -37,6 +37,7 @@ dependencies = [
     "lightgbm>=4.6.0",
     "plotly>=6.6.0",
     "notebook>=7.5.5",
+    "ipywidgets>=8.1.8",
 ]
 
 
