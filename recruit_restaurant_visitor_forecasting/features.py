@@ -144,7 +144,9 @@ def add_open_usually_col(df: pd.DataFrame) -> pd.DataFrame:
     y = df[VISITORS_COL].ne(0).astype(int)
 
     model = LogisticRegression(l1_ratio=0, class_weight="balanced")
-    model.fit(X, y)
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    model.fit(X_scaled, y)
     df[OPEN_USUALLY_COL] = model.predict_proba(X)[:, 1]
     df = df.drop(columns=["pct_min_median", "pct_min_gen", "hol_pct"])
 
