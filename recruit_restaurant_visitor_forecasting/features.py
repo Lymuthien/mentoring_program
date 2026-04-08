@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
+from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import BallTree
 from statsmodels.stats.outliers_influence import variance_inflation_factor as vif
 
@@ -12,6 +13,7 @@ from recruit_restaurant_visitor_forecasting.config.config import (
     VISIT_DATE_COL,
     LATITUDE_COL,
     LONGITUDE_COL,
+    VISITORS_COL,
 )
 from recruit_restaurant_visitor_forecasting.config.features import (
     TOTAL_RES_COL,
@@ -33,7 +35,6 @@ from recruit_restaurant_visitor_forecasting.config.features import (
     DAY_STR_COL,
     WEEK_COL,
     CITY_COL,
-    DAYS_FROM_LAST_VISIT_COL,
     OPEN_USUALLY_COL,
     OPENED_RECENTLY_FLG,
     MEAN_PREF,
@@ -44,7 +45,6 @@ from recruit_restaurant_visitor_forecasting.config.features import (
     LAGS,
 )
 from recruit_restaurant_visitor_forecasting.config.feature_names import (
-    weekday_opened,
     nbrs_col,
     last_month_col,
     lag_col,
@@ -62,6 +62,7 @@ G_MEAN = "global_mean"
 IS_CURRENT_DF = "_is_current"
 LOOKUP_DATE = "_last_month_date"
 N_RESTAURANTS = "n_restaurants"
+DOW_RENAME_MAP = {i: day for i, day in enumerate(DAYS_OF_WEEK)}
 
 
 def get_first_str_values(s: pd.Series, n: int, sep: str = " ") -> pd.Series:
@@ -91,47 +92,62 @@ def get_opened_restaurants_pct(
     return df_pct
 
 
-def get_open_by_weekday_pct(
-    df: pd.DataFrame, visit_col: str, visitors_col: str
-) -> pd.DataFrame:
-    grouped = df.groupby([AIR_RESTAURANT_ID_COL, df[visit_col].dt.dayofweek])
+def _get_zero_pct_by_group(grouped) -> pd.DataFrame:
     count = grouped.size()
-    nonzero_count = grouped[visitors_col].agg(lambda s: s.ne(0).sum())
+    nonzero_count = grouped[VISITORS_COL].agg(lambda s: s.ne(0).sum())
+    pct_s = nonzero_count / count
 
-    pct_df = (nonzero_count / count).unstack(fill_value=0)
-    cols_map = {i: day for i, day in enumerate(DAYS_OF_WEEK)}
-    pct_df = pct_df.rename(columns=cols_map).reset_index()
-
-    return pct_df
-
-
-def get_open_status(pct_df: pd.DataFrame, threshold_ratio: float = 0.5):
-    pct_df = pct_df
-    max_pct = pct_df[DAYS_OF_WEEK].max(axis=1)
-    threshold = threshold_ratio * max_pct
-
-    open_cols = {
-        weekday_opened(day): (pct_df[day] >= threshold).astype(int)
-        for day in DAYS_OF_WEEK
-    }
-    pct_df = pct_df.assign(**open_cols)
-    pct_df = pct_df.drop(DAYS_OF_WEEK, axis=1)
+    if isinstance(pct_s.index, pd.MultiIndex):
+        pct_df = pct_s.unstack(fill_value=0)
+    else:
+        pct_df = (nonzero_count / count).to_frame().T
 
     return pct_df
 
 
-def add_open_usually(df: pd.DataFrame, drop_days: bool = True):
-    df = df.copy()
+def _get_open_by_weekday_pct(df: pd.DataFrame, all: bool = False) -> pd.DataFrame:
+    if all:
+        grouped = df.groupby([df[VISIT_DATE_COL].dt.dayofweek])
+    else:
+        grouped = df.groupby([AIR_RESTAURANT_ID_COL, df[VISIT_DATE_COL].dt.dayofweek])
+    return _get_zero_pct_by_group(grouped).rename(columns=DOW_RENAME_MAP)
 
-    def get_open(row):
-        day = row[DAY_OF_WEEK_COL]
-        return row[weekday_opened(day)]
 
-    df[OPEN_USUALLY_COL] = df.apply(get_open, axis=1)
+def _get_open_by_holiday_pct(df: pd.DataFrame) -> pd.DataFrame:
+    grouped = df.groupby([AIR_RESTAURANT_ID_COL, df[HOLIDAY_COL]])
+    return _get_zero_pct_by_group(grouped)
 
-    if drop_days:
-        open_flags = [weekday_opened(day) for day in DAYS_OF_WEEK]
-        df = df.drop(open_flags, axis=1)
+
+def _set_dow_feature(df: pd.DataFrame, other: pd.DataFrame, col: str) -> pd.DataFrame:
+    df = df.merge(other, left_on=AIR_RESTAURANT_ID_COL, right_index=True)
+    df[col] = df.apply(lambda x: x[x[DAY_OF_WEEK_COL]], axis=1)
+    df = df.drop(columns=DAYS_OF_WEEK)
+
+    return df
+
+
+def add_open_usually_col(df: pd.DataFrame) -> pd.DataFrame:
+    weekday_pct_by_rest = _get_open_by_weekday_pct(df)
+    weekday_pct_median_by_rest = weekday_pct_by_rest.median()
+    pct_min_median = weekday_pct_by_rest - weekday_pct_median_by_rest
+
+    weekday_pct_all = _get_open_by_weekday_pct(df, all=True)
+    pct_min_gen = weekday_pct_by_rest - weekday_pct_all.values
+    holiday_pct = _get_open_by_holiday_pct(df)
+
+    df = _set_dow_feature(df, pct_min_median, "pct_min_median")
+    df = _set_dow_feature(df, pct_min_gen, "pct_min_gen")
+    df = df.merge(holiday_pct[1], left_on=AIR_RESTAURANT_ID_COL, right_index=True)
+    df = df.rename(columns={1: "hol_pct"})
+
+    X = df[[HOLIDAY_COL, "pct_min_median", "pct_min_gen", "hol_pct"]].values
+    y = df[VISITORS_COL].ne(0).astype(int)
+
+    model = LogisticRegression(l1_ratio=0, class_weight="balanced")
+    model.fit(X, y)
+    df[OPEN_USUALLY_COL] = model.predict_proba(X)[:, 1]
+    df = df.drop(columns=["pct_min_median", "pct_min_gen", "hol_pct"])
+
     return df
 
 
@@ -210,39 +226,6 @@ def add_opened_recently_flg(
     df[OPENED_RECENTLY_FLG] = (df[OPEN_DATE_COL] >= threshold).astype(int)
 
     return df
-
-
-def add_days_since_last_record(
-    df: pd.DataFrame, id_col: str, date_col: str, history_df: pd.DataFrame = None
-) -> pd.DataFrame:
-    df = df.copy()
-
-    if history_df is not None:
-        history_df = history_df.copy()
-        df[IS_CURRENT_DF] = True
-        history_df[IS_CURRENT_DF] = False
-        combined = pd.concat([history_df, df])
-    else:
-        combined = df
-        combined[IS_CURRENT_DF] = True
-
-    combined.sort_values([id_col, date_col], inplace=True)
-
-    is_open = combined[OPEN_USUALLY_COL]
-    prev_is_open = is_open.groupby(combined[id_col]).shift(1).fillna(0)
-    seg = prev_is_open.groupby(combined[id_col]).cumsum()
-    position = combined.groupby([combined[id_col], seg]).cumcount().astype(int)
-
-    first_is_open = (
-        is_open.groupby([combined[id_col], seg]).transform("first").astype(bool)
-    )
-    base = np.where(first_is_open, 0, 1)
-
-    combined[DAYS_FROM_LAST_VISIT_COL] = base + position
-
-    result = combined[combined[IS_CURRENT_DF]].drop(IS_CURRENT_DF, axis=1)
-
-    return result.reset_index(drop=True)
 
 
 def add_time_based_target_encoding(

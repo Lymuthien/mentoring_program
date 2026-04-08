@@ -12,7 +12,6 @@ from recruit_restaurant_visitor_forecasting.config.features import (
     CITY_COL,
     RES_VISITORS_DIFF_NBR_COL,
     OPENED_RECENTLY_FLG,
-    DAYS_FROM_LAST_VISIT_COL,
     MEAN_PREF,
     MEDIAN_PREF,
     STD_PREF,
@@ -34,7 +33,6 @@ DROP_FEATURES = [
     RES_VISITORS_DIFF_NBR_COL,
     GOLDEN_WEEK_FLG,
     OPENED_RECENTLY_FLG,
-    DAYS_FROM_LAST_VISIT_COL,
 ]
 DROP_COLUMNS = [
     AIR_RESTAURANT_ID_COL,

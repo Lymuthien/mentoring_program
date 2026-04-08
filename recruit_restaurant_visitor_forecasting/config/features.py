@@ -35,7 +35,6 @@ OPEN_USUALLY_COL = "open_usually"
 OPENED_RECENTLY_FLG = "opened_recently"
 
 DAYS_FROM_HOL_COL = "days_from_holiday"
-DAYS_FROM_LAST_VISIT_COL = "days_from_last_visit"
 
 VISITORS_DIFF_COL = "visitors_difference"
 VISITORS_DOW_MEAN_COL = "visitors_dow_mean"
