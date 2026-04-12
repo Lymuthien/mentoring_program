@@ -18,7 +18,6 @@ from recruit_restaurant_visitor_forecasting.config.config import (
     RESERVE_VISITORS_COL,
     AIR_RESTAURANT_ID_COL,
 )
-from recruit_restaurant_visitor_forecasting.config.feature_names import agg_window_col
 from recruit_restaurant_visitor_forecasting.config.features import (
     DAY_OF_WEEK_COL,
     DAY_STR_COL,
@@ -542,9 +541,15 @@ def plot_pairs_rel(pairs: list | tuple, df: pd.DataFrame):
     n_cols = 2 if len(pairs) != 1 else 1
     n_rows = int(np.ceil(len(pairs) / n_cols))
     fig, ax = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(10, n_rows * 3))
-    axs = ax.flatten()
+    axs = ax.flatten() if n_cols > 1 else [ax]
 
     for ax, pair in zip(axs, pairs):
         df.plot.scatter(x=pair[0], y=pair[1], alpha=0.5, ax=ax)
 
     plt.tight_layout()
+
+
+def plot_over_reservation(df: pd.Series, ax, group: str, kind: str):
+    df.plot(kind=kind, ax=ax)
+    ax.set_title(f"Percentage of (reservations > visitors) per {group}")
+    ax.set_ylabel(f"% of rows (reservations > visitors) within group")

@@ -244,3 +244,7 @@ def get_pairs_by_corr(df: pd.DataFrame, threshold: float) -> pd.Series:
     corr_pairs = df.where(mask).stack()
 
     return corr_pairs[corr_pairs.abs() > threshold].rename("correlation")
+
+
+def get_group_size_ratio(df1: pd.DataFrame, df2: pd.DataFrame, group) -> pd.DataFrame:
+    return df1.groupby(group).size() / df2.groupby(group).size() * 100
