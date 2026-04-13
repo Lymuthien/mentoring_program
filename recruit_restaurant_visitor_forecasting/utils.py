@@ -17,6 +17,8 @@ from recruit_restaurant_visitor_forecasting.config.features import (
     HPG_DAILY_COL,
     ACTUAL_MEAN,
     PRED_MEAN,
+    RES_IMPOSSIBILITY_COL,
+    TOTAL_RES_COL,
 )
 from recruit_restaurant_visitor_forecasting.features import add_sum_of_reserves
 
@@ -248,3 +250,17 @@ def get_pairs_by_corr(df: pd.DataFrame, threshold: float) -> pd.Series:
 
 def get_group_size_ratio(df1: pd.DataFrame, df2: pd.DataFrame, group) -> pd.DataFrame:
     return df1.groupby(group).size() / df2.groupby(group).size() * 100
+
+
+def get_non_outliers_mask(s: pd.Series) -> bool:
+    Q1 = s.quantile(0.25)
+    Q3 = s.quantile(0.75)
+    IQR = Q3 - Q1
+    return (s < Q3 + IQR) & (s > Q1 - IQR)
+
+
+def get_visitors_by_zero_res(df: pd.DataFrame, res_impossible: bool = True) -> pd.Series:
+    visitors_no = get_non_outliers_mask(df[VISITORS_COL])
+    res_poss_mask = df[RES_IMPOSSIBILITY_COL] == int(res_impossible)
+    zero_reservations = df[TOTAL_RES_COL] == 0
+    return df[res_poss_mask & visitors_no & zero_reservations][VISITORS_COL]

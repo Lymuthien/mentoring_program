@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler, RobustScaler
 from sklearn.neighbors import BallTree
 from statsmodels.stats.outliers_influence import variance_inflation_factor as vif
 
@@ -752,3 +753,19 @@ def select_by_vif(df: pd.DataFrame, cols: list, threshold: int = 10) -> list:
         cols.pop(worst_idx)
 
     return cols
+
+
+def get_features_by_variance_threshold(df: pd.DataFrame, threshold: float = 0.01) -> pd.Series:
+    df = df.select_dtypes(include=['number'])
+
+    transformer = RobustScaler()
+    scaled_data = transformer.fit_transform(df)
+    scaled_df = pd.DataFrame(scaled_data, columns=df.columns)
+    features_var = scaled_df.var()
+
+    return features_var[features_var < threshold].index.to_list()
+
+
+def get_features_by_target_corr(df: pd.DataFrame, threshold: float = 0.2) -> pd.Series:
+    df = df.corr(numeric_only=True)
+    return df[df[VISITORS_COL] < threshold].index.to_list()
