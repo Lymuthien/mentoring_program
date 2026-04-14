@@ -1,6 +1,10 @@
 from IPython.display import display
 import pandas as pd
 
+from recruit_restaurant_visitor_forecasting.config.config import VISITORS_COL
+from recruit_restaurant_visitor_forecasting.config.features import OPEN_USUALLY_COL
+from recruit_restaurant_visitor_forecasting.plots import plot_pairs_rel
+
 type DatasetInfo = tuple[pd.DataFrame, str, str]
 type UniqueIds = dict[str, set]
 
@@ -35,3 +39,25 @@ def print_low_frequency_values(df: pd.DataFrame, col: str, frequency: int) -> No
         f"Values with frequency less than {frequency}: ",
         len(counts[counts <= frequency]),
     )
+
+
+def print_ou_vis_corr(corr: float):
+    print(f"Correlation with visitors: {corr:.2f}")
+
+
+def print_means(lower_mean: float, upper_mean: float):
+    print(
+        f"Visitor mean on closing days: {lower_mean:.2f}.\n"
+        f"Visitor mean on opening days: {upper_mean:.2f}."
+    )
+
+
+def show_open_usually_stats(df: pd.DataFrame, prob_threshold: float = 0.5):
+    corr = df[VISITORS_COL].corr(df[OPEN_USUALLY_COL])
+
+    print_ou_vis_corr(corr)
+    plot_pairs_rel([(OPEN_USUALLY_COL, VISITORS_COL)], df)
+
+    lower = df[df[OPEN_USUALLY_COL] <= prob_threshold][VISITORS_COL].mean()
+    upper = df[df[OPEN_USUALLY_COL] > prob_threshold][VISITORS_COL].mean()
+    print_means(lower, upper)

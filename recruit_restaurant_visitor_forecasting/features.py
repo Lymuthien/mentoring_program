@@ -115,7 +115,7 @@ def _get_open_by_weekday_pct(df: pd.DataFrame, all: bool = False) -> pd.DataFram
 
 
 def _get_open_by_holiday_pct(df: pd.DataFrame) -> pd.DataFrame:
-    grouped = df.groupby([AIR_RESTAURANT_ID_COL, df[HOLIDAY_COL]])
+    grouped = df.groupby([AIR_RESTAURANT_ID_COL, HOLIDAY_COL])
     return _get_zero_pct_by_group(grouped)
 
 
@@ -127,29 +127,65 @@ def _set_dow_feature(df: pd.DataFrame, other: pd.DataFrame, col: str) -> pd.Data
     return df
 
 
-def add_open_usually_col(df: pd.DataFrame) -> pd.DataFrame:
-    weekday_pct_by_rest = _get_open_by_weekday_pct(df)
-    weekday_pct_median_by_rest = weekday_pct_by_rest.median()
-    pct_min_median = weekday_pct_by_rest - weekday_pct_median_by_rest
+def add_open_usually_discr(df: pd.DataFrame, threshold: float = 0.5) -> pd.DataFrame:
+    df = df.copy()
 
-    weekday_pct_all = _get_open_by_weekday_pct(df, all=True)
-    pct_min_gen = weekday_pct_by_rest - weekday_pct_all.values
+    pct_df = _get_open_by_weekday_pct(df)
+    threshold = pct_df[DAYS_OF_WEEK].max(axis=1) * threshold
+    pct_df = pct_df[DAYS_OF_WEEK].ge(threshold, axis=0).astype(int)
+
+    df = df.merge(pct_df, left_on=AIR_RESTAURANT_ID_COL, right_index=True)
+    df[OPEN_USUALLY_COL] = df.apply(lambda x: x[x[DAY_OF_WEEK_COL]], axis=1)
+    df = df.drop(columns=DAYS_OF_WEEK)
+    return df
+
+
+def add_open_usually_col(df: pd.DataFrame) -> pd.DataFrame:
+    dow_pct = _get_open_by_weekday_pct(df)
+    dow_pct_median = dow_pct.median(axis=1).rename("median")
     holiday_pct = _get_open_by_holiday_pct(df)
 
-    df = _set_dow_feature(df, pct_min_median, "pct_min_median")
+    dop_pct_all = _get_open_by_weekday_pct(df, all=True)
+    pct_min_gen = dow_pct - dop_pct_all.values
+
+    df = _set_dow_feature(df, dow_pct, "dow_pct")
     df = _set_dow_feature(df, pct_min_gen, "pct_min_gen")
+    df = df.merge(dow_pct_median, left_on=AIR_RESTAURANT_ID_COL, right_index=True)
     df = df.merge(holiday_pct[1], left_on=AIR_RESTAURANT_ID_COL, right_index=True)
     df = df.rename(columns={1: "hol_pct"})
 
-    X = df[[HOLIDAY_COL, "pct_min_median", "pct_min_gen", "hol_pct"]].values
+    X = df[[HOLIDAY_COL, "dow_pct", "hol_pct", "median", "pct_min_gen"]].values
     y = df[VISITORS_COL].ne(0).astype(int)
 
     model = LogisticRegression(l1_ratio=0, class_weight="balanced")
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
     model.fit(X_scaled, y)
-    df[OPEN_USUALLY_COL] = model.predict_proba(X)[:, 1]
-    df = df.drop(columns=["pct_min_median", "pct_min_gen", "hol_pct"])
+    df[OPEN_USUALLY_COL] = model.predict_proba(X_scaled)[:, 1]
+    df = df.drop(columns=["dow_pct", "hol_pct", "median", "pct_min_gen"])
+
+    return df
+
+
+def add_open_usually_col_rolling(df: pd.DataFrame) -> pd.DataFrame:
+    y = df[VISITORS_COL].ne(0).astype(int)
+    df["y_rolling"] = (
+        y.groupby([df[AIR_RESTAURANT_ID_COL], df[VISIT_DATE_COL].dt.dayofweek])
+        .rolling(4).mean().shift(1).fillna(0).reset_index(level=[0, 1], drop=True)
+    )
+    holiday_pct = _get_open_by_holiday_pct(df)
+
+    df = df.merge(holiday_pct[1], left_on=AIR_RESTAURANT_ID_COL, right_index=True)
+    df = df.rename(columns={1: "hol_pct"})
+
+    X = df[[HOLIDAY_COL, "y_rolling", "hol_pct"]].values
+
+    model = LogisticRegression(l1_ratio=0, class_weight="balanced")
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    model.fit(X_scaled, y)
+    df[OPEN_USUALLY_COL] = model.predict_proba(X_scaled)[:, 1]
+    df = df.drop(columns=["hol_pct", "y_rolling"])
 
     return df
 
