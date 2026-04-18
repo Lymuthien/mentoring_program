@@ -553,3 +553,8 @@ def plot_over_reservation(df: pd.Series, ax, group: str, kind: str):
     df.plot(kind=kind, ax=ax)
     ax.set_title(f"Percentage of (reservations > visitors) per {group}")
     ax.set_ylabel(f"% of rows (reservations > visitors) within group")
+
+
+def plot_hpg_interc_pct(df: pd.Series, ax, group: str, kind: str):
+    df.plot(kind=kind, ax=ax)
+    ax.set_title(f"Percentage of air & hpg interceptions by {group}")
