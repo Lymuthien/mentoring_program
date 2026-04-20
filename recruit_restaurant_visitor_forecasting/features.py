@@ -5,6 +5,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler, RobustScaler
 from sklearn.neighbors import BallTree
 from statsmodels.stats.outliers_influence import variance_inflation_factor as vif
+import statsmodels.api as sm
 
 from recruit_restaurant_visitor_forecasting.config.config import (
     AIR_RESTAURANT_ID_COL,
@@ -776,17 +777,26 @@ def add_reservation_impossibility(
     return df
 
 
-def select_by_vif(df: pd.DataFrame, cols: list, threshold: int = 10) -> list:
+def select_by_vif(df: pd.DataFrame, cols: list, threshold: int = 10, max_r_diff: float = 0.01) -> list:
     cols = cols.copy()
+    last_dropped = None
+    last_r = 0
+
     while True:
         X = df[cols].values
+        res = sm.OLS(df[VISITORS_COL], sm.add_constant(X)).fit()
+        if last_r - res.rsquared_adj > max_r_diff:
+            cols.append(last_dropped)
+            break
+
+        last_r = res.rsquared_adj
         vifs = [vif(X, i) for i in range(len(cols))]
 
         if max(vifs) <= threshold:
             break
 
         worst_idx = np.argmax(vifs)
-        cols.pop(worst_idx)
+        last_dropped = cols.pop(worst_idx)
 
     return cols
 
