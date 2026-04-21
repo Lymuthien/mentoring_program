@@ -170,15 +170,15 @@ def add_open_usually_col(df: pd.DataFrame) -> pd.DataFrame:
 
 def add_open_usually_col_rolling(df: pd.DataFrame) -> pd.DataFrame:
     y = df[VISITORS_COL].ne(0).astype(int)
-    df["y_rolling"] = (
-        y.groupby([df[AIR_RESTAURANT_ID_COL], df[VISIT_DATE_COL].dt.dayofweek])
-        .rolling(4).mean().shift(1).fillna(0).reset_index(level=[0, 1], drop=True)
-    )
     holiday_pct = _get_open_by_holiday_pct(df)
 
     df = df.merge(holiday_pct[1], left_on=AIR_RESTAURANT_ID_COL, right_index=True)
     df = df.rename(columns={1: "hol_pct"})
 
+    df["y_rolling"] = (
+        y.groupby([df[AIR_RESTAURANT_ID_COL], df[VISIT_DATE_COL].dt.dayofweek])
+        .rolling(4).mean().shift(1).fillna(0).reset_index(level=[0, 1], drop=True)
+    )
     X = df[[HOLIDAY_COL, "y_rolling", "hol_pct"]].values
 
     model = LogisticRegression(l1_ratio=0, class_weight="balanced")
