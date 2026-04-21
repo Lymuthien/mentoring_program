@@ -176,9 +176,15 @@ def add_open_usually_col_rolling(df: pd.DataFrame) -> pd.DataFrame:
     df = df.rename(columns={1: "hol_pct"})
 
     df["y_rolling"] = (
-        y.groupby([df[AIR_RESTAURANT_ID_COL], df[VISIT_DATE_COL].dt.dayofweek])
-        .rolling(4).mean().shift(1).fillna(0).reset_index(level=[0, 1], drop=True)
+        y.groupby([df[AIR_RESTAURANT_ID_COL], df[DAY_OF_WEEK_COL]])
+        .rolling(4)
+        .mean()
+        .groupby(level=[0, 1])
+        .shift(1)
+        .reset_index(level=[0, 1], drop=True)
     )
+    df = df.dropna(subset=["y_rolling"])
+    y = y.loc[df.index]
     X = df[[HOLIDAY_COL, "y_rolling", "hol_pct"]].values
 
     model = LogisticRegression(l1_ratio=0, class_weight="balanced")
@@ -187,6 +193,21 @@ def add_open_usually_col_rolling(df: pd.DataFrame) -> pd.DataFrame:
     model.fit(X_scaled, y)
     df[OPEN_USUALLY_COL] = model.predict_proba(X_scaled)[:, 1]
     df = df.drop(columns=["hol_pct", "y_rolling"])
+
+    return df
+
+
+def add_open_usually_discr_rolling(
+    df: pd.DataFrame, threshold: float = 0.5
+) -> pd.DataFrame:
+    df = df.copy()
+
+    grouped = df.groupby([AIR_RESTAURANT_ID_COL, DAY_OF_WEEK_COL])
+    vis_rolling = grouped.rolling(4)[VISITORS_COL].median()
+    rolling_shift = vis_rolling.groupby(level=[0, 1]).shift(1).dropna()
+    opened = (rolling_shift > threshold).astype(int)
+    opened = opened.reset_index(level=[0, 1], drop=True)
+    df[OPEN_USUALLY_COL] = opened
 
     return df
 
@@ -777,7 +798,9 @@ def add_reservation_impossibility(
     return df
 
 
-def select_by_vif(df: pd.DataFrame, cols: list, threshold: int = 10, max_r_diff: float = 0.01) -> list:
+def select_by_vif(
+    df: pd.DataFrame, cols: list, threshold: int = 10, max_r_diff: float = 0.01
+) -> list:
     cols = cols.copy()
     last_dropped = None
     last_r = 0
@@ -801,8 +824,10 @@ def select_by_vif(df: pd.DataFrame, cols: list, threshold: int = 10, max_r_diff:
     return cols
 
 
-def get_features_by_variance_threshold(df: pd.DataFrame, threshold: float = 0.01) -> pd.Series:
-    df = df.select_dtypes(include=['number'])
+def get_features_by_variance_threshold(
+    df: pd.DataFrame, threshold: float = 0.01
+) -> pd.Series:
+    df = df.select_dtypes(include=["number"])
 
     transformer = RobustScaler()
     scaled_data = transformer.fit_transform(df)
