@@ -687,7 +687,7 @@ def fill_air_res_gaps(
     )
     hpg_gap_scaled[AVG_SCALE] = hpg_gap_scaled[AVG_SCALE].fillna(overall_median)
     hpg_gap_scaled[EST_AIR_RES] = (
-        (hpg_gap_scaled[RESERVE_VISITORS_COL] * hpg_gap_scaled[AVG_SCALE])
+        (hpg_gap_scaled[RESERVE_VISITORS_COL].replace(0, 1) * hpg_gap_scaled[AVG_SCALE])
         .round()
         .astype(int)
     )
