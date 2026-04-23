@@ -10,6 +10,7 @@ from recruit_restaurant_visitor_forecasting.config.config import (
     VISITORS_COL,
     AIR_RESTAURANT_ID_COL,
     AIR_GENRE_COL,
+    RESERVE_VISITORS_COL,
 )
 from recruit_restaurant_visitor_forecasting.config.features import (
     CITY_COL,
@@ -49,31 +50,19 @@ def get_dfs_daily_corr(
     return corr, combined
 
 
-def find_reservations_exceed_visitors(
-    grouping_df: pd.DataFrame,
-    merging_df: pd.DataFrame,
-    store_col: str,
-    date_col: str,
-    reserve_visitors_col,
-    visitors_col,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+def get_abs_reservation(df: pd.DataFrame, id_col: str) -> pd.DataFrame:
     daily_visitors = (
-        grouping_df.groupby([store_col, date_col])[reserve_visitors_col]
-        .sum()
-        .reset_index()
+        df.groupby([id_col, VISIT_DATE_COL])[RESERVE_VISITORS_COL].sum().reset_index()
     )
-    merged_df = pd.merge(
-        merging_df,
-        daily_visitors,
-        on=[store_col, date_col],
-        how="outer",
-    ).fillna(0)
+    return daily_visitors
 
-    problematic_rows = merged_df[
-        (merged_df[visitors_col] < merged_df[reserve_visitors_col])
-    ][[date_col, store_col, visitors_col, reserve_visitors_col]]
 
-    return problematic_rows, merged_df
+def find_reservations_exceed_visitors(df: pd.DataFrame, id_col: str) -> pd.DataFrame:
+    problematic_rows = df[(df[VISITORS_COL] < df[RESERVE_VISITORS_COL])][
+        [VISIT_DATE_COL, id_col, VISITORS_COL, RESERVE_VISITORS_COL]
+    ]
+
+    return problematic_rows
 
 
 def filter_by_column_comparison(
@@ -259,7 +248,9 @@ def get_non_outliers_mask(s: pd.Series) -> bool:
     return (s < Q3 + IQR) & (s > Q1 - IQR)
 
 
-def get_visitors_by_zero_res(df: pd.DataFrame, res_impossible: bool = True) -> pd.Series:
+def get_visitors_by_zero_res(
+    df: pd.DataFrame, res_impossible: bool = True
+) -> pd.Series:
     visitors_no = get_non_outliers_mask(df[VISITORS_COL])
     res_poss_mask = df[RES_IMPOSSIBILITY_COL] == int(res_impossible)
     zero_reservations = df[TOTAL_RES_COL] == 0
