@@ -19,6 +19,7 @@ GENRE_TE = "air_genre_te"
 AREA_TE = "air_city_te"
 
 NBRS_SUFFIX = "_nbrs"
+DOW_SUFFIX = "_dow"
 MEAN_PREF= "mean"
 MEDIAN_PREF = "median"
 STD_PREF = "std"
@@ -37,9 +38,9 @@ OPENED_RECENTLY_FLG = "opened_recently"
 DAYS_FROM_HOL_COL = "days_from_holiday"
 
 VISITORS_DIFF_COL = "visitors_difference"
-VISITORS_DOW_MEAN_COL = "visitors_dow_mean"
-VISITORS_DOW_MEAN_NBR_COL = VISITORS_DOW_MEAN_COL + NBRS_SUFFIX
+VISITORS_DOW = VISITORS_COL + DOW_SUFFIX
 VISITORS_NBR_COL = VISITORS_COL + NBRS_SUFFIX
+VISITORS_DOW_NBRS = VISITORS_NBR_COL + DOW_SUFFIX
 
 # Reserve columns
 

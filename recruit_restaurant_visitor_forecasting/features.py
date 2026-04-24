@@ -51,6 +51,7 @@ from recruit_restaurant_visitor_forecasting.config.feature_names import (
     last_month_col,
     lag_col,
     agg_window_col,
+    agg_exp_col,
 )
 
 pd.set_option("mode.copy_on_write", True)
@@ -538,25 +539,28 @@ def add_last_month_visitors(
     return df
 
 
-def add_historical_dow_mean(
-    df: pd.DataFrame, target_col: str, feature_name: str, test_df: pd.DataFrame
+def add_dow_cum_agg(
+    df: pd.DataFrame,
+    target_col: str,
+    feature: str,
+    test_df: pd.DataFrame,
+    aggs: list[str],
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     df = df.sort_values([AIR_RESTAURANT_ID_COL, VISIT_DATE_COL])
-    grouping_keys = [AIR_RESTAURANT_ID_COL, DAY_OF_WEEK_COL]
+    grouping = [AIR_RESTAURANT_ID_COL, DAY_OF_WEEK_COL]
 
-    def shift_and_expanding_mean(series):
-        shifted = series.shift(1)
-        return shifted.expanding(min_periods=1).mean()
+    exp = df.groupby(grouping)[target_col].expanding(min_periods=1)
 
-    df[feature_name] = df.groupby(grouping_keys)[target_col].transform(
-        shift_and_expanding_mean
-    )
+    for agg in aggs:
+        col = agg_exp_col(feature, agg)
+        agg_s = exp.agg(agg).groupby(grouping).shift(1)
+        df[col] = agg_s.reset_index(level=grouping, drop=True)
 
+    features = [agg_exp_col(feature, agg) for agg in aggs]
     last_values = df.loc[
-        df.groupby(grouping_keys)[VISIT_DATE_COL].idxmax(),
-        [*grouping_keys, feature_name],
+        df.groupby(grouping)[VISIT_DATE_COL].idxmax(), [*grouping, *features]
     ].reset_index(drop=True)
-    test_df = test_df.merge(last_values, on=grouping_keys, how="left")
+    test_df = test_df.merge(last_values, on=grouping, how="left")
 
     return df.sort_index(), test_df
 
