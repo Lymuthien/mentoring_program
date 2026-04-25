@@ -20,6 +20,10 @@ from recruit_restaurant_visitor_forecasting.config.features import (
     STD_PREF,
     MAX_PREF,
     MIN_PREF,
+    VISITORS_DOW,
+    VISITORS_DOW_NBRS,
+    DOW_WINDOW,
+    VISITORS_LAST_MONTH,
 )
 from recruit_restaurant_visitor_forecasting.features import (
     add_lags,
@@ -27,10 +31,12 @@ from recruit_restaurant_visitor_forecasting.features import (
     add_neighbors_stats,
     add_last_month_visitors,
     add_reserves_difference,
+    add_dow_cum_agg,
+    add_open_usually_discr_rolling,
+    add_dow_rol_agg,
 )
 from recruit_restaurant_visitor_forecasting.config.feature_names import (
     lag_col,
-    last_month_col,
     nbrs_col,
 )
 
@@ -61,7 +67,13 @@ def _clean_merge_columns(df: pd.DataFrame, original_cols: set) -> pd.DataFrame:
 
 
 def update_features_for_date(
-    df: pd.DataFrame, current_date: pd.Timestamp
+    df: pd.DataFrame,
+    current_date: pd.Timestamp,
+    res_visitors_diff_nbr_rolling: bool = False,
+    res_visitors_diff_rolling: bool = False,
+    res_visitors_diff_nbr: bool = False,
+    res_visitors_diff: bool = False,
+    visitors_dow_nbr: bool = False,
 ) -> pd.DataFrame:
     id_col = AIR_RESTAURANT_ID_COL
 
@@ -70,6 +82,8 @@ def update_features_for_date(
     old_df = df
 
     original_cols = set(df.columns)
+
+    df = add_open_usually_discr_rolling(df)
 
     aggs = [
         (MEAN_PREF, {}),
@@ -81,26 +95,40 @@ def update_features_for_date(
     df = add_basic_stats(df, VISITORS_COL, id_col, aggs)
     df = add_neighbors_stats(df, VISITORS_COL, CITY_COL)
 
-    df = add_last_month_visitors(df, VISITORS_COL)
+    df = add_last_month_visitors(df)
     df = add_lags(df, id_col, VISITORS_COL, False)
     df = _clean_merge_columns(df, original_cols)
 
-    last_month = last_month_col(VISITORS_COL)
     lag_28 = lag_col(VISITORS_COL, 28)
     nbrs_lag_28 = lag_col(nbrs_col(VISITORS_COL), 28)
 
     df = add_lags(df, CITY_COL, VISITORS_NBR_COL, True)
     df[lag_28] = df[lag_28].fillna(old_df[lag_28]).fillna(df[nbrs_lag_28])
-    df[last_month] = df[last_month].fillna(old_df[last_month]).fillna(df[lag_28])
-
-    df = add_reserves_difference(df, VISITORS_COL, TOTAL_RES_COL, RES_VISITORS_DIFF_COL)
-    df = add_reserves_difference(
-        df, VISITORS_NBR_COL, TOTAL_RES_NBR_COL, RES_VISITORS_DIFF_NBR_COL
+    df[VISITORS_LAST_MONTH] = (
+        df[VISITORS_LAST_MONTH].fillna(old_df[VISITORS_LAST_MONTH]).fillna(df[lag_28])
     )
 
+    aggs = [MEAN_PREF, MEDIAN_PREF, STD_PREF]
+    df, _ = add_dow_cum_agg(df, VISITORS_COL, VISITORS_DOW, aggs)
+    if visitors_dow_nbr:
+        df, _ = add_dow_cum_agg(df, VISITORS_NBR_COL, VISITORS_DOW_NBRS, aggs)
+    df = add_dow_rol_agg(df, VISITORS_COL, VISITORS_DOW, aggs, DOW_WINDOW)
+
+    if res_visitors_diff:
+        df = add_reserves_difference(
+            df, VISITORS_COL, TOTAL_RES_COL, RES_VISITORS_DIFF_COL
+        )
+    if res_visitors_diff_nbr:
+        df = add_reserves_difference(
+            df, VISITORS_NBR_COL, TOTAL_RES_NBR_COL, RES_VISITORS_DIFF_NBR_COL
+        )
+
     aggs = [(MEAN_PREF, {})]
-    df = add_basic_stats(df, RES_VISITORS_DIFF_COL, id_col, aggs)
-    df = add_neighbors_stats(df, RES_VISITORS_DIFF_NBR_COL, CITY_COL, aggs, False)
+    if res_visitors_diff_rolling:
+        df = add_basic_stats(df, RES_VISITORS_DIFF_COL, id_col, aggs)
+
+    if res_visitors_diff_nbr_rolling:
+        df = add_neighbors_stats(df, RES_VISITORS_DIFF_NBR_COL, CITY_COL, aggs, False)
 
     df_next_updated = df[df[VISIT_DATE_COL] == current_date]
 
@@ -113,6 +141,7 @@ def recursive_predict(
     train_features: pd.DataFrame,
     train_labels: pd.Series,
     drop_cols: list,
+    **kwargs,
 ) -> tuple[pd.Series, pd.DataFrame]:
     id_col = AIR_RESTAURANT_ID_COL
     feature_exclude = {id_col, VISIT_DATE_COL, VISITORS_COL, *drop_cols}
@@ -125,7 +154,7 @@ def recursive_predict(
     result = pd.Series(index=test_features.index, dtype=float)
 
     for date in tqdm(test_dates, desc="Predicting recursively"):
-        updated_features = update_features_for_date(combined, date)
+        updated_features = update_features_for_date(combined, date, **kwargs)
 
         missing_cols = updated_features.columns.difference(combined.columns)
         if not missing_cols.empty:
@@ -139,7 +168,7 @@ def recursive_predict(
         ].values
 
         current_features = combined[date_mask]
-        X_current = current_features.drop(columns=feature_exclude)
+        X_current = current_features.drop(columns=[VISITORS_COL])
         y_pred = model.predict(X_current)
         y_pred = np.maximum(y_pred, 0)
 

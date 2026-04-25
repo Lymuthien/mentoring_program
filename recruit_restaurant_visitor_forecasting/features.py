@@ -46,10 +46,10 @@ from recruit_restaurant_visitor_forecasting.config.features import (
     AGG_WINDOWS,
     LAGS,
     CLOSED_FLG,
+    VISITORS_LAST_MONTH,
 )
 from recruit_restaurant_visitor_forecasting.config.feature_names import (
     nbrs_col,
-    last_month_col,
     lag_col,
     agg_window_col,
     agg_exp_col,
@@ -519,17 +519,14 @@ def add_neighbors_stats(
 
 def add_last_month_visitors(
     df: pd.DataFrame,
-    target_col,
     reference_df: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    feature_col = last_month_col(target_col)
-
     df = df.copy()
     ref_df = df if reference_df is None else reference_df
 
     df[LOOKUP_DATE] = df[VISIT_DATE_COL] - pd.DateOffset(months=1)
-    lookup = ref_df[[AIR_RESTAURANT_ID_COL, VISIT_DATE_COL, target_col]].rename(
-        columns={VISIT_DATE_COL: LOOKUP_DATE, target_col: feature_col}
+    lookup = ref_df[[AIR_RESTAURANT_ID_COL, VISIT_DATE_COL, VISITORS_COL]].rename(
+        columns={VISIT_DATE_COL: LOOKUP_DATE, VISITORS_COL: VISITORS_LAST_MONTH}
     )
 
     df = df.merge(lookup, on=[AIR_RESTAURANT_ID_COL, LOOKUP_DATE], how="left")
@@ -542,8 +539,8 @@ def add_dow_cum_agg(
     df: pd.DataFrame,
     target_col: str,
     feature: str,
-    test_df: pd.DataFrame,
     aggs: list[str],
+    test_df: pd.DataFrame = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     df = df.sort_values([AIR_RESTAURANT_ID_COL, VISIT_DATE_COL])
     grouping = [AIR_RESTAURANT_ID_COL, DAY_OF_WEEK_COL]
@@ -555,11 +552,12 @@ def add_dow_cum_agg(
         agg_s = exp.agg(agg).groupby(grouping).shift(1)
         df[col] = agg_s.reset_index(level=grouping, drop=True)
 
-    features = [agg_exp_col(feature, agg) for agg in aggs]
-    last_values = df.loc[
-        df.groupby(grouping)[VISIT_DATE_COL].idxmax(), [*grouping, *features]
-    ].reset_index(drop=True)
-    test_df = test_df.merge(last_values, on=grouping, how="left")
+    if test_df is not None:
+        features = [agg_exp_col(feature, agg) for agg in aggs]
+        last_values = df.loc[
+            df.groupby(grouping)[VISIT_DATE_COL].idxmax(), [*grouping, *features]
+        ].reset_index(drop=True)
+        test_df = test_df.merge(last_values, on=grouping, how="left")
 
     return df.sort_index(), test_df
 

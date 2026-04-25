@@ -73,7 +73,6 @@ def _run_one_fold(
     y_val = y.iloc[val_idx]
 
     model_ = clone(model)
-
     model_.fit(X_train, y_train)
 
     y_pred, _ = recursive_predict(
