@@ -823,28 +823,30 @@ def add_reservation_impossibility(
 
 def select_by_vif(
     df: pd.DataFrame, cols: list, threshold: int = 10, max_r_diff: float = 0.01
-) -> list:
-    cols = cols.copy()
+) -> tuple[list, pd.Series]:
+    remaining_cols = cols.copy()
+    drop_order = []
     last_dropped = None
     last_r = 0
 
     while True:
-        X = df[cols].values
+        X = df[remaining_cols].values
         res = sm.OLS(df[VISITORS_COL], sm.add_constant(X)).fit()
         if last_r - res.rsquared_adj > max_r_diff:
-            cols.append(last_dropped)
+            remaining_cols.append(last_dropped)
             break
 
         last_r = res.rsquared_adj
-        vifs = [vif(X, i) for i in range(len(cols))]
-
-        if max(vifs) <= threshold:
+        vifs = [vif(X, i) for i in range(len(remaining_cols))]
+        vifs_max = max(vifs)
+        if vifs_max <= threshold:
             break
 
         worst_idx = np.argmax(vifs)
-        last_dropped = cols.pop(worst_idx)
+        last_dropped = remaining_cols.pop(worst_idx)
+        drop_order.append((last_dropped, vifs_max))
 
-    return cols
+    return remaining_cols, pd.Series(dict(drop_order))
 
 
 def get_features_by_variance_threshold(
