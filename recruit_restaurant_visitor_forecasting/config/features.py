@@ -34,6 +34,7 @@ CITY_REGION_COL = "city_region"
 OPEN_DATE_COL = "open_date"
 OPEN_USUALLY_COL = "open_usually"
 OPENED_RECENTLY_FLG = "opened_recently"
+CLOSED_FLG = "closed"
 
 DAYS_FROM_HOL_COL = "days_from_holiday"
 
@@ -65,4 +66,5 @@ CITY_REGION_DIV_N = 2
 CITY_CLUSTERS_RANGE = range(3, 7)
 AGG_WINDOWS = [7, 14, 28]
 LAGS = [1, 7, 28]
+DOW_WINDOW = 4
 

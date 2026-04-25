@@ -45,6 +45,7 @@ from recruit_restaurant_visitor_forecasting.config.features import (
     RES_IMPOSSIBILITY_COL,
     AGG_WINDOWS,
     LAGS,
+    CLOSED_FLG,
 )
 from recruit_restaurant_visitor_forecasting.config.feature_names import (
     nbrs_col,
@@ -471,18 +472,16 @@ def add_basic_stats(
     df = df.sort_values([id_col, VISIT_DATE_COL])
 
     masked = prepare_masked_series(df, target_col, OPEN_USUALLY_COL, id_col)
-
     grouped = masked.groupby(df[id_col])
-    result = df
 
     for window in windows:
         r = grouped.rolling(window, min_periods=1)
 
         for agg, agg_kwargs in aggs:
             col = agg_window_col(target_col, agg, window)
-            result[col] = r.agg(agg, **agg_kwargs).reset_index(level=0, drop=True)
+            df[col] = r.agg(agg, **agg_kwargs).reset_index(level=0, drop=True)
 
-    return result
+    return df
 
 
 def add_neighbors_stats(
@@ -563,6 +562,26 @@ def add_dow_cum_agg(
     test_df = test_df.merge(last_values, on=grouping, how="left")
 
     return df.sort_index(), test_df
+
+
+def add_dow_rol_agg(
+    df: pd.DataFrame,
+    target_col: str,
+    feature: str,
+    aggs: list[str],
+    window: int,
+) -> pd.DataFrame:
+    df = df.sort_values([AIR_RESTAURANT_ID_COL, VISIT_DATE_COL])
+    grouping = [AIR_RESTAURANT_ID_COL, DAY_OF_WEEK_COL]
+
+    rol = df.groupby(grouping)[target_col].rolling(window, min_periods=1)
+
+    for agg in aggs:
+        col = agg_window_col(feature, agg, window)
+        agg_s = rol.agg(agg).groupby(grouping).shift(1)
+        df[col] = agg_s.reset_index(level=grouping, drop=True)
+
+    return df.sort_index()
 
 
 def add_reserves_difference(
@@ -844,3 +863,12 @@ def get_features_by_variance_threshold(
 def get_features_by_target_corr(df: pd.DataFrame, threshold: float = 0.2) -> pd.Series:
     df = df.corr(numeric_only=True)
     return df[df[VISITORS_COL] < threshold].index.to_list()
+
+
+def add_closed_flg(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    last_dates = df[df[VISITORS_COL] != 0].groupby([AIR_RESTAURANT_ID_COL])[VISIT_DATE_COL].max()
+    threshold_dates = df[AIR_RESTAURANT_ID_COL].map(last_dates)
+    df[CLOSED_FLG] = (df[VISIT_DATE_COL] > threshold_dates).astype(int)
+
+    return df
