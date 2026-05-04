@@ -255,3 +255,8 @@ def get_visitors_by_zero_res(
     res_poss_mask = df[RES_IMPOSSIBILITY_COL] == int(res_impossible)
     zero_reservations = df[TOTAL_RES_COL] == 0
     return df[res_poss_mask & visitors_no & zero_reservations][VISITORS_COL]
+
+
+def get_all_zero_reservations(df: pd.DataFrame):
+    grouped = df.groupby(AIR_RESTAURANT_ID_COL)
+    return grouped[TOTAL_RES_COL].agg(lambda x: (x == 0).all())

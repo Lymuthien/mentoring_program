@@ -61,3 +61,10 @@ def show_open_usually_stats(df: pd.DataFrame, prob_threshold: float = 0.5):
     lower = df[df[OPEN_USUALLY_COL] <= prob_threshold][VISITORS_COL].mean()
     upper = df[df[OPEN_USUALLY_COL] > prob_threshold][VISITORS_COL].mean()
     print_means(lower, upper)
+
+
+def print_period_problematic_rest(period: str, rest_count: int, all_zero_count: int):
+    print("Period:", period)
+    print("[Restaurants with reservation possibility are taken into account]")
+    print("Count of restaurants:", rest_count)
+    print("Count of restaurants with all 0 reservations:", all_zero_count)
