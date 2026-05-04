@@ -34,6 +34,43 @@ class FeatureDropper(TransformerMixin, BaseEstimator):
         return X
 
 
+class MeanBaseline(BaseEstimator):
+    def __init__(self, id_col: str, date_col: str, dow_col: str, mean_col: str):
+        self.id_col = id_col
+        self.date_col = date_col
+        self.dow_col = dow_col
+        self.mean_col = mean_col
+        self._last_values = None
+        self._global_mean = None
+
+    def fit(self, X, y):
+        X = X.sort_values([self.id_col, self.dow_col, self.date_col])
+        last_values = X.groupby([self.id_col, self.dow_col], as_index=False).tail(1)
+        last_values = last_values[[self.id_col, self.dow_col, self.mean_col]]
+        self._last_values = last_values
+
+        self._global_mean = X.groupby([self.dow_col], as_index=False)[self.mean_col].mean()
+
+        return self
+
+    def predict(self, X):
+        if self.mean_col in X:
+            X = X.drop(columns=[self.mean_col])
+
+        X = X.merge(self._last_values, on=[self.id_col, self.dow_col], how="left")
+        X = X.merge(
+            self._global_mean,
+            on=self.dow_col,
+            how="left",
+            suffixes=("", "_global")
+        )
+
+        X[self.mean_col] = X[self.mean_col].fillna(
+            X[f"{self.mean_col}_global"]
+        )
+
+        return X[self.mean_col].values
+
 def build_lgbm_pipeline(
     drop_features: list[str],
     random_state: int,

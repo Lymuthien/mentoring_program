@@ -1,5 +1,5 @@
 CV_SPLITS = 5
-TEST_SIZE = 0.2
+TEST_SIZE = 0.1
 
 # SHAP Feature selection
 
