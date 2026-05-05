@@ -811,12 +811,26 @@ def add_reservation_impossibility(
     df: pd.DataFrame, air_res: pd.DataFrame, hpg_res: pd.DataFrame
 ) -> pd.DataFrame:
     ID_COL = AIR_RESTAURANT_ID_COL
-    df = df.copy()
-    df[RES_IMPOSSIBILITY_COL] = 0
-    missing_mask = ~df[ID_COL].isin(set(air_res[ID_COL]) | set(hpg_res[ID_COL]))
-    df.loc[missing_mask, RES_IMPOSSIBILITY_COL] = 1
+    MIN_DATE = "min_date"
+    MAX_DATE = "max_date"
 
-    return df
+    combined_res = pd.concat(
+        [air_res[[ID_COL, VISIT_DATE_COL]], hpg_res[[ID_COL, VISIT_DATE_COL]]], axis=0
+    )
+    res_bounds = (
+        combined_res.groupby(ID_COL)[VISIT_DATE_COL]
+        .agg(["min", "max"])
+        .rename(columns={"min": MIN_DATE, "max": MAX_DATE})
+    )
+    df = df.merge(res_bounds, on=ID_COL, how="left")
+
+    missing_data = df[MIN_DATE].isna()
+    out_of_range = (df[VISIT_DATE_COL] < df[MIN_DATE]) | (
+        df[VISIT_DATE_COL] > df[MAX_DATE]
+    )
+    df[RES_IMPOSSIBILITY_COL] = (missing_data | out_of_range).astype(int)
+
+    return df.drop(columns=[MIN_DATE, MAX_DATE])
 
 
 def select_by_vif(
@@ -867,7 +881,9 @@ def get_features_by_target_corr(df: pd.DataFrame, threshold: float = 0.2) -> pd.
 
 def add_closed_flg(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-    last_dates = df[df[VISITORS_COL] != 0].groupby([AIR_RESTAURANT_ID_COL])[VISIT_DATE_COL].max()
+    last_dates = (
+        df[df[VISITORS_COL] != 0].groupby([AIR_RESTAURANT_ID_COL])[VISIT_DATE_COL].max()
+    )
     threshold_dates = df[AIR_RESTAURANT_ID_COL].map(last_dates)
     df[CLOSED_FLG] = (df[VISIT_DATE_COL] > threshold_dates).astype(int)
 
