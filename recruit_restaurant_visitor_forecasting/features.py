@@ -58,8 +58,6 @@ from recruit_restaurant_visitor_forecasting.config.feature_names import (
 pd.set_option("mode.copy_on_write", True)
 
 SCALE_COL = "scale"
-AVG_SCALE = "avg_scale"
-EST_AIR_RES = "estimated_air_reserve"
 CUM_SUM = "cum_sum"
 CUM_CNT = "cum_count"
 G_MEAN = "global_mean"
@@ -639,98 +637,94 @@ def calc_air_hpg_scale(
     merged["hpg"] = merged["hpg"].replace(0, 1)
     merged[SCALE_COL] = merged["air"] / merged["hpg"]
 
-    scaling_factors = (
-        merged.groupby(AIR_RESTAURANT_ID_COL)[SCALE_COL]
-        .mean()
-        .rename(AVG_SCALE)
-        .reset_index()
-    )
+    scaling = merged.groupby(AIR_RESTAURANT_ID_COL)[SCALE_COL].mean().reset_index()
     overall_median = merged[SCALE_COL].median()
 
-    return scaling_factors, overall_median
+    return scaling, overall_median
 
 
-def fill_air_res_without_hpg(
-    air_df: pd.DataFrame, gap_dates: pd.Series, ids_with_hpg: set[str]
+def fill_air_res_by_dow(
+    air_df: pd.DataFrame,
+    gap_dates: pd.Series,
+    ids_with_hpg,
+    consider_hpg: bool,
+    max_date_offset: int,
+    min_date_offset: int,
 ) -> pd.DataFrame:
-    air_ids = set(air_df[AIR_RESTAURANT_ID_COL].unique())
-    ids_without_hpg = air_ids - ids_with_hpg
+    ID_COL = AIR_RESTAURANT_ID_COL
+    ids = set(air_df[ID_COL].unique())
+    if consider_hpg:
+        ids -= ids_with_hpg
 
-    air_non_gap = air_df[~air_df[VISIT_DATE_COL].isin(gap_dates)]
-    air_non_gap = air_non_gap[air_non_gap[AIR_RESTAURANT_ID_COL].isin(ids_without_hpg)]
-
-    air_non_gap[DAY_OF_WEEK_COL] = air_non_gap[VISIT_DATE_COL].dt.dayofweek
-    air_daily_non_gap = (
-        air_non_gap.groupby([AIR_RESTAURANT_ID_COL, DAY_OF_WEEK_COL])[
-            RESERVE_VISITORS_COL
-        ]
-        .mean()
-        .rename("dow_avg_reserve")
-        .reset_index()
+    air_ngap = air_df[~air_df[VISIT_DATE_COL].isin(gap_dates)]
+    mask = air_ngap[ID_COL].isin(ids)
+    mask &= air_ngap[VISIT_DATE_COL] >= gap_dates.min() - pd.DateOffset(
+        days=min_date_offset
     )
-    overall_avg = air_non_gap[RESERVE_VISITORS_COL].mean()
+    mask &= air_ngap[VISIT_DATE_COL] <= gap_dates.max() + pd.DateOffset(
+        days=max_date_offset
+    )
+    air_ngap = air_ngap.loc[mask]
+
+    air_ngap[DAY_OF_WEEK_COL] = air_ngap[VISIT_DATE_COL].dt.dayofweek
+    reservations = air_ngap.groupby([ID_COL, DAY_OF_WEEK_COL])[RESERVE_VISITORS_COL]
+    daily_res = reservations.mean().reset_index()
+    overall_avg = air_ngap[RESERVE_VISITORS_COL].mean()
 
     all_combos = pd.DataFrame(
         {
-            AIR_RESTAURANT_ID_COL: np.repeat(list(ids_without_hpg), len(gap_dates)),
-            VISIT_DATE_COL: pd.to_datetime(np.tile(gap_dates, len(ids_without_hpg))),
+            ID_COL: np.repeat(list(ids), len(gap_dates)),
+            VISIT_DATE_COL: pd.to_datetime(np.tile(gap_dates, len(ids))),
         }
     )
     all_combos[DAY_OF_WEEK_COL] = all_combos[VISIT_DATE_COL].dt.dayofweek
-    all_combos = all_combos.merge(
-        air_daily_non_gap, on=[AIR_RESTAURANT_ID_COL, DAY_OF_WEEK_COL], how="left"
-    )
-    all_combos[EST_AIR_RES] = (
-        all_combos["dow_avg_reserve"].fillna(overall_avg).round().astype(int)
+    all_combos = all_combos.merge(daily_res, on=[ID_COL, DAY_OF_WEEK_COL], how="left")
+    all_combos[RESERVE_VISITORS_COL] = (
+        all_combos[RESERVE_VISITORS_COL].fillna(overall_avg).round().astype(int)
     )
 
-    estimated_air_rows = pd.DataFrame(
-        {
-            AIR_RESTAURANT_ID_COL: all_combos[AIR_RESTAURANT_ID_COL],
-            RESERVE_VISITORS_COL: all_combos[EST_AIR_RES],
-            VISIT_DATE_COL: all_combos[VISIT_DATE_COL],
-        }
-    )
-    return estimated_air_rows
+    est_air_rows = all_combos[[ID_COL, RESERVE_VISITORS_COL, VISIT_DATE_COL]]
+
+    return est_air_rows
 
 
 def fill_air_res_gaps(
-    air_df: pd.DataFrame, hpg_df: pd.DataFrame, gap_dates: list[pd.Timestamp]
+    air_df: pd.DataFrame,
+    hpg_df: pd.DataFrame,
+    gap_dates: list[pd.Timestamp],
+    consider_hpg: bool = True,
+    max_date_offset: int = 0,
+    min_date_offset: int = 1000,
 ) -> pd.DataFrame:
     gap_dates = pd.to_datetime(gap_dates)
 
-    scaling_factors, overall_median = calc_air_hpg_scale(air_df, hpg_df, gap_dates)
-
     hpg_gap = hpg_df[hpg_df[VISIT_DATE_COL].isin(gap_dates)]
     hpg_gap_daily = add_sum_of_reserves(hpg_gap)
-    hpg_gap_scaled = hpg_gap_daily.merge(
-        scaling_factors, on=AIR_RESTAURANT_ID_COL, how="left"
-    )
-    hpg_gap_scaled[AVG_SCALE] = hpg_gap_scaled[AVG_SCALE].fillna(overall_median)
-    hpg_gap_scaled[EST_AIR_RES] = (
-        (hpg_gap_scaled[RESERVE_VISITORS_COL].replace(0, 1) * hpg_gap_scaled[AVG_SCALE])
-        .round()
-        .astype(int)
+    hpg_ids = set(hpg_gap_daily[AIR_RESTAURANT_ID_COL].unique())
+    est_res_dow = fill_air_res_by_dow(
+        air_df, gap_dates, hpg_ids, consider_hpg, max_date_offset, min_date_offset
     )
 
-    estimated_air_rows_hpg = pd.DataFrame(
-        {
-            AIR_RESTAURANT_ID_COL: hpg_gap_scaled[AIR_RESTAURANT_ID_COL],
-            RESERVE_VISITORS_COL: hpg_gap_scaled[EST_AIR_RES],
-            VISIT_DATE_COL: hpg_gap_scaled[VISIT_DATE_COL],
-        }
-    )
+    if consider_hpg:
+        scaling_factors, overall_median = calc_air_hpg_scale(air_df, hpg_df, gap_dates)
 
-    est_air_rows = fill_air_res_without_hpg(
-        air_df, gap_dates, set(hpg_gap_daily[AIR_RESTAURANT_ID_COL].unique())
-    )
-    est_air_rows = pd.concat([estimated_air_rows_hpg, est_air_rows], ignore_index=True)
+        hpg_gap_scaled = hpg_gap_daily.merge(
+            scaling_factors, on=AIR_RESTAURANT_ID_COL, how="left"
+        )
+        hpg_gap_scaled[SCALE_COL] = hpg_gap_scaled[SCALE_COL].fillna(overall_median)
+        hpg_gap_scaled[RESERVE_VISITORS_COL].replace(0, 1, inplace=True)
+        scaled_res = hpg_gap_scaled[RESERVE_VISITORS_COL] * hpg_gap_scaled[SCALE_COL]
+        hpg_gap_scaled[RESERVE_VISITORS_COL] = scaled_res.round().astype(int)
+
+        est_res_scaled = hpg_gap_scaled[
+            [AIR_RESTAURANT_ID_COL, RESERVE_VISITORS_COL, VISIT_DATE_COL]
+        ]
+        est_res_dow = pd.concat([est_res_scaled, est_res_dow], ignore_index=True)
 
     air_filtered = air_df[~air_df[VISIT_DATE_COL].isin(gap_dates)]
-    air_filtered = pd.concat([air_filtered, est_air_rows], ignore_index=True)
-    air_filtered = air_filtered.sort_values([AIR_RESTAURANT_ID_COL, VISIT_DATE_COL])
+    air_filtered = pd.concat([air_filtered, est_res_dow], ignore_index=True)
 
-    return air_filtered
+    return air_filtered.sort_values([AIR_RESTAURANT_ID_COL, VISIT_DATE_COL])
 
 
 def fill_city_by_nearest(df: pd.DataFrame, none_val: str = "None") -> pd.DataFrame:
