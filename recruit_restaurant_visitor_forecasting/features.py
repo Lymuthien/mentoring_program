@@ -478,6 +478,7 @@ def add_basic_stats(
         for agg, agg_kwargs in aggs:
             col = agg_window_col(target_col, agg, window)
             df[col] = r.agg(agg, **agg_kwargs).reset_index(level=0, drop=True)
+            df[col] = df[col].fillna(0)
 
     return df
 
@@ -518,6 +519,7 @@ def add_neighbors_stats(
 def add_last_month_visitors(
     df: pd.DataFrame,
     reference_df: pd.DataFrame | None = None,
+    fillna: bool = True,
 ) -> pd.DataFrame:
     df = df.copy()
     ref_df = df if reference_df is None else reference_df
@@ -528,6 +530,8 @@ def add_last_month_visitors(
     )
 
     df = df.merge(lookup, on=[AIR_RESTAURANT_ID_COL, LOOKUP_DATE], how="left")
+    if fillna:
+        df[VISITORS_LAST_MONTH] = df[VISITORS_LAST_MONTH].fillna(df[lag_col(VISITORS_COL, 28)])
     df.drop(columns=LOOKUP_DATE, inplace=True)
 
     return df
@@ -664,12 +668,12 @@ def fill_air_res_by_dow(
     mask &= air_ngap[VISIT_DATE_COL] <= gap_dates.max() + pd.DateOffset(
         days=max_date_offset
     )
+    mask &= air_ngap[RES_IMPOSSIBILITY_COL] == 0
     air_ngap = air_ngap.loc[mask]
 
     air_ngap[DAY_OF_WEEK_COL] = air_ngap[VISIT_DATE_COL].dt.dayofweek
     reservations = air_ngap.groupby([ID_COL, DAY_OF_WEEK_COL])[RESERVE_VISITORS_COL]
     daily_res = reservations.mean().reset_index()
-    overall_avg = air_ngap[RESERVE_VISITORS_COL].mean()
 
     all_combos = pd.DataFrame(
         {
@@ -680,7 +684,7 @@ def fill_air_res_by_dow(
     all_combos[DAY_OF_WEEK_COL] = all_combos[VISIT_DATE_COL].dt.dayofweek
     all_combos = all_combos.merge(daily_res, on=[ID_COL, DAY_OF_WEEK_COL], how="left")
     all_combos[RESERVE_VISITORS_COL] = (
-        all_combos[RESERVE_VISITORS_COL].fillna(overall_avg).round().astype(int)
+        all_combos[RESERVE_VISITORS_COL].fillna(0).round().astype(int)
     )
 
     est_air_rows = all_combos[[ID_COL, RESERVE_VISITORS_COL, VISIT_DATE_COL]]
@@ -712,7 +716,7 @@ def fill_air_res_gaps(
             scaling_factors, on=AIR_RESTAURANT_ID_COL, how="left"
         )
         hpg_gap_scaled[SCALE_COL] = hpg_gap_scaled[SCALE_COL].fillna(overall_median)
-        hpg_gap_scaled[RESERVE_VISITORS_COL].replace(0, 1, inplace=True)
+        hpg_gap_scaled.replace({RESERVE_VISITORS_COL: {0: 1}}, inplace=True)
         scaled_res = hpg_gap_scaled[RESERVE_VISITORS_COL] * hpg_gap_scaled[SCALE_COL]
         hpg_gap_scaled[RESERVE_VISITORS_COL] = scaled_res.round().astype(int)
 
@@ -721,6 +725,12 @@ def fill_air_res_gaps(
         ]
         est_res_dow = pd.concat([est_res_scaled, est_res_dow], ignore_index=True)
 
+    est_res_dow = est_res_dow.merge(
+        air_df[[AIR_RESTAURANT_ID_COL, VISIT_DATE_COL, RES_IMPOSSIBILITY_COL]],
+        on=[AIR_RESTAURANT_ID_COL, VISIT_DATE_COL],
+        how="left",
+    )
+    est_res_dow.loc[est_res_dow[RES_IMPOSSIBILITY_COL] == 1, RESERVE_VISITORS_COL] = 0
     air_filtered = air_df[~air_df[VISIT_DATE_COL].isin(gap_dates)]
     air_filtered = pd.concat([air_filtered, est_res_dow], ignore_index=True)
 

@@ -95,7 +95,7 @@ def update_features_for_date(
     df = add_basic_stats(df, VISITORS_COL, id_col, aggs)
     df = add_neighbors_stats(df, VISITORS_COL, CITY_COL)
 
-    df = add_last_month_visitors(df)
+    df = add_last_month_visitors(df, fillna=False)
     df = add_lags(df, id_col, VISITORS_COL, False)
     df = _clean_merge_columns(df, original_cols)
 
@@ -168,6 +168,10 @@ def recursive_predict(
         ].values
 
         current_features = combined[date_mask]
+        numeric_cols = current_features.select_dtypes(include="number").columns
+        mean = current_features[numeric_cols].mean()
+        current_features[numeric_cols] = current_features[numeric_cols].fillna(mean)
+
         X_current = current_features.drop(columns=[VISITORS_COL])
         y_pred = model.predict(X_current)
         y_pred = np.maximum(y_pred, 0)

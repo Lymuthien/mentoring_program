@@ -3,6 +3,7 @@ import optuna
 import pandas as pd
 import shap
 from optuna.samplers import TPESampler
+from sklearn.metrics import make_scorer
 from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
 from typing import Optional, Union
@@ -34,7 +35,6 @@ def load_data() -> tuple:
 
 
 def prepare_features(features: pd.DataFrame) -> pd.DataFrame:
-    features = features.copy()
     features[VISIT_DATE_COL] = pd.to_datetime(features[VISIT_DATE_COL])
     features = features.sort_values([VISIT_DATE_COL, AIR_RESTAURANT_ID_COL])
 
@@ -224,6 +224,9 @@ def ridge_gridsearch(
     random_state: int = 42,
 ) -> GridSearchCV:
     pipeline = build_ridge_pipeline(drop_features, random_state)
+
+    if scoring == "neg_root_mean_squared_log_error" or scoring == rmsle:
+        scoring = make_scorer(rmsle, greater_is_better=False)
 
     if param_grid is None:
         param_grid = [

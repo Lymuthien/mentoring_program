@@ -260,3 +260,11 @@ def get_visitors_by_zero_res(
 def get_all_zero_reservations(df: pd.DataFrame):
     grouped = df.groupby(AIR_RESTAURANT_ID_COL)
     return grouped[TOTAL_RES_COL].agg(lambda x: (x == 0).all())
+
+
+def get_res_vis_corr(df: pd.DataFrame, res_df: pd.DataFrame) -> float:
+    res = add_sum_of_reserves(res_df)
+    df = df.merge(res, on=[AIR_RESTAURANT_ID_COL, VISIT_DATE_COL], how="left")
+    df = df.fillna(0)
+    corr = df[VISITORS_COL].corr(df[RESERVE_VISITORS_COL]).round(2)
+    return corr

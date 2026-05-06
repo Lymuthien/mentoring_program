@@ -4,6 +4,7 @@ from recruit_restaurant_visitor_forecasting.config.config import (
     AIR_RESTAURANT_ID_COL,
     VISIT_DATE_COL,
     VISITORS_COL,
+    AIR_GENRE_COL,
 )
 from recruit_restaurant_visitor_forecasting.config.features import (
     VISITORS_NBR_COL,
@@ -65,6 +66,7 @@ DROP_COLUMNS = [
     VISITORS_NBR_COL,
     DAY_OF_WEEK_COL,
     CITY_COL,
+    AIR_GENRE_COL,
     *DROP_FEATURES,
 ]
 
