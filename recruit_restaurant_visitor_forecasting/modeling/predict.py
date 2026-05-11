@@ -141,7 +141,7 @@ def recursive_predict(
     test_features: pd.DataFrame,
     train_features: pd.DataFrame,
     train_labels: pd.Series,
-    drop_cols: list,
+    drop_cols: list = None,
     update_reservations: bool = True,
     **kwargs,
 ) -> tuple[pd.Series, pd.DataFrame]:
