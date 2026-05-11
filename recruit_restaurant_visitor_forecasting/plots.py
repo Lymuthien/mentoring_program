@@ -367,7 +367,8 @@ def _hist_error(axes, df: pd.DataFrame, group: str):
 
 
 def _plot_error_acf(axes, df: pd.DataFrame, group: str):
-    plot_acf_(df[MEAN_ERROR], lags=30, ax=axes, zero=False)
+    max_lags = min(30, len(df) - 1)
+    plot_acf_(df[MEAN_ERROR], lags=max_lags, ax=axes, zero=False)
     axes.set_title(f"ACF of daily mean error: {group}")
     axes.grid(True, alpha=0.3)
 

@@ -268,3 +268,8 @@ def get_res_vis_corr(df: pd.DataFrame, res_df: pd.DataFrame) -> float:
     df = df.fillna(0)
     corr = df[VISITORS_COL].corr(df[RESERVE_VISITORS_COL]).round(2)
     return corr
+
+
+def get_rmsle(group, cols: list[str], actual: str) -> pd.Series:
+    scores = {c + RMSLE_SUFFIX: rmsle(group[actual], group[c]) for c in cols}
+    return pd.Series(scores)
