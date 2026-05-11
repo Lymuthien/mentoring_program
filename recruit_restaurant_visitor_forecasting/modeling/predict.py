@@ -38,6 +38,7 @@ from recruit_restaurant_visitor_forecasting.features import (
 from recruit_restaurant_visitor_forecasting.config.feature_names import (
     lag_col,
     nbrs_col,
+    agg_exp_col,
 )
 
 
@@ -141,17 +142,17 @@ def recursive_predict(
     train_features: pd.DataFrame,
     train_labels: pd.Series,
     drop_cols: list,
+    update_reservations: bool = True,
     **kwargs,
 ) -> tuple[pd.Series, pd.DataFrame]:
-    id_col = AIR_RESTAURANT_ID_COL
-    feature_exclude = {id_col, VISIT_DATE_COL, VISITORS_COL, *drop_cols}
-
     combined = pd.concat([train_features, test_features], ignore_index=True)
+    combined = combined.copy()
     combined[VISITORS_COL] = 0.0
     combined.loc[: len(train_features) - 1, VISITORS_COL] = train_labels.values
 
     test_dates = sorted(test_features[VISIT_DATE_COL].unique())
     result = pd.Series(index=test_features.index, dtype=float)
+    i = 0
 
     for date in tqdm(test_dates, desc="Predicting recursively"):
         updated_features = update_features_for_date(combined, date, **kwargs)
@@ -171,6 +172,16 @@ def recursive_predict(
         numeric_cols = current_features.select_dtypes(include="number").columns
         mean = current_features[numeric_cols].mean()
         current_features[numeric_cols] = current_features[numeric_cols].fillna(mean)
+
+        if update_reservations:
+            res_col = agg_exp_col(TOTAL_RES_COL, i + 1)
+            if res_col in current_features.columns:
+                current_features[TOTAL_RES_COL] = current_features[res_col]
+                i += 1
+            else:
+                current_features[TOTAL_RES_COL] = current_features[
+                    agg_exp_col(TOTAL_RES_COL, i)
+                ]
 
         X_current = current_features.drop(columns=[VISITORS_COL])
         y_pred = model.predict(X_current)

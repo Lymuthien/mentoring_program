@@ -9,5 +9,5 @@ def lag_col(col: str, lag: int) -> str:
 def agg_window_col(col: str, agg: str, window: int | str) -> str:
     return f"{col}_{agg}_{window}"
 
-def agg_exp_col(col: str, agg: str) -> str:
+def agg_exp_col(col: str, agg: str | int) -> str:
     return f"{col}_{agg}"

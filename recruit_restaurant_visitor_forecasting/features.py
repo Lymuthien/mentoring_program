@@ -12,7 +12,9 @@ from recruit_restaurant_visitor_forecasting.config.config import (
     HOLIDAY_COL,
     HPG_RESTAURANT_ID_COL,
     RESERVE_VISITORS_COL,
+    RESERVE_DATETIME_COL,
     VISIT_DATE_COL,
+    VISIT_DATETIME_COL,
     LATITUDE_COL,
     LONGITUDE_COL,
     VISITORS_COL,
@@ -369,13 +371,27 @@ def add_time_based_target_encoding(
 
 
 def add_sum_of_reserves(
-    df: pd.DataFrame, output_col: str = None, id_col: str = AIR_RESTAURANT_ID_COL
+    df: pd.DataFrame,
+    output_col: str = None,
+    id_col: str = AIR_RESTAURANT_ID_COL,
+    max_res_diff: int = 0,
 ) -> pd.DataFrame:
-    df = df.groupby([id_col, VISIT_DATE_COL])[RESERVE_VISITORS_COL].sum()
-    if output_col:
-        df = df.rename(output_col)
+    def get_sum(df):
+        return df.groupby([id_col, VISIT_DATE_COL])[RESERVE_VISITORS_COL].sum()
 
-    return df.reset_index()
+    col = output_col if output_col else RESERVE_VISITORS_COL
+    new_df = get_sum(df).rename(col).reset_index()
+
+    for i in range(max_res_diff):
+        mask = (
+            df[RESERVE_DATETIME_COL].dt.normalize() + pd.DateOffset(days=i)
+            < df[VISIT_DATE_COL]
+        )
+        temp = get_sum(df[mask]).rename(agg_exp_col(col, i)).reset_index()
+        new_df = new_df.merge(temp, on=[id_col, VISIT_DATE_COL], how="left")
+
+    new_df = new_df.fillna(0)
+    return new_df
 
 
 def add_nbrs_reserves(
@@ -407,7 +423,11 @@ def add_nbrs_reserves(
 
 
 def add_total_reservations(
-    df: pd.DataFrame, air_res: pd.DataFrame, hpg_res: pd.DataFrame, region_col: str
+    df: pd.DataFrame,
+    air_res: pd.DataFrame,
+    hpg_res: pd.DataFrame,
+    region_col: str,
+    max_res_diff: int = 0,
 ) -> pd.DataFrame:
     merge_columns = [AIR_RESTAURANT_ID_COL, VISIT_DATE_COL, region_col]
     df = (
@@ -415,12 +435,43 @@ def add_total_reservations(
         .merge(hpg_res, on=merge_columns, how="left")
         .drop(HPG_RESTAURANT_ID_COL, axis=1)
     )
-    cols = [RESERVE_AIR_COL, RESERVE_HPG_COL, RESERVE_AIR_NBR_COL]
+
+    pairs = [(RESERVE_AIR_COL, RESERVE_HPG_COL)]
+    pairs += [
+        (agg_exp_col(RESERVE_AIR_COL, i), agg_exp_col(RESERVE_HPG_COL, i))
+        for i in range(max_res_diff)
+    ]
+    cols = [col for pair in pairs for col in pair]
     df[cols] = df[cols].fillna(0)
-    df[TOTAL_RES_COL] = df[RESERVE_AIR_COL] + df[RESERVE_HPG_COL]
-    df.drop([RESERVE_AIR_COL, RESERVE_HPG_COL], axis=1, inplace=True)
+    total_cols = {}
+
+    for i, (air_col, hpg_col) in enumerate(pairs):
+        total = TOTAL_RES_COL if i == 0 else agg_exp_col(TOTAL_RES_COL, i)
+
+        total_cols[total] = df[air_col] + df[hpg_col]
+
+    df = pd.concat([df, pd.DataFrame(total_cols, index=df.index)], axis=1)
+    df.drop(cols, axis=1, inplace=True)
 
     return df
+
+
+def remove_repetitions(air: pd.DataFrame, hpg: pd.DataFrame) -> pd.DataFrame:
+    merge_cols = [
+        AIR_RESTAURANT_ID_COL,
+        RESERVE_DATETIME_COL,
+        RESERVE_VISITORS_COL,
+        VISIT_DATETIME_COL,
+        VISIT_DATE_COL,
+    ]
+    repeated_res = air.merge(hpg, on=merge_cols).drop(columns=[HPG_RESTAURANT_ID_COL])
+    repeated_res["repeated"] = 1
+
+    hpg = hpg.merge(repeated_res, on=merge_cols, how="left")
+    hpg["repeated"] = hpg["repeated"].fillna(0)
+    hpg.loc[hpg["repeated"] == 1, RESERVE_VISITORS_COL] = 0
+
+    return hpg.drop(columns=["repeated", RES_IMPOSSIBILITY_COL])
 
 
 def add_total_nbr_reservations(
@@ -438,6 +489,7 @@ def add_total_nbr_reservations(
     df[RESERVE_HPG_NBR_COL] = df[RESERVE_HPG_NBR_COL].fillna(df["temp"])
     df = df.drop("temp", axis=1)
     df[TOTAL_RES_NBR_COL] = df[RESERVE_HPG_NBR_COL] + df[RESERVE_AIR_NBR_COL]
+    df[TOTAL_RES_NBR_COL] = df[TOTAL_RES_NBR_COL].fillna(0)
     df = df.drop([RESERVE_HPG_NBR_COL, RESERVE_AIR_NBR_COL], axis=1)
 
     return df
@@ -531,7 +583,9 @@ def add_last_month_visitors(
 
     df = df.merge(lookup, on=[AIR_RESTAURANT_ID_COL, LOOKUP_DATE], how="left")
     if fillna:
-        df[VISITORS_LAST_MONTH] = df[VISITORS_LAST_MONTH].fillna(df[lag_col(VISITORS_COL, 28)])
+        df[VISITORS_LAST_MONTH] = df[VISITORS_LAST_MONTH].fillna(
+            df[lag_col(VISITORS_COL, 28)]
+        )
     df.drop(columns=LOOKUP_DATE, inplace=True)
 
     return df
