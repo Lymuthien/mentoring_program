@@ -5,6 +5,7 @@ from recruit_restaurant_visitor_forecasting.config.config import (
     VISIT_DATE_COL,
     VISITORS_COL,
     AIR_GENRE_COL,
+    HOLIDAY_COL,
 )
 from recruit_restaurant_visitor_forecasting.config.features import (
     VISITORS_NBR_COL,
@@ -23,6 +24,9 @@ from recruit_restaurant_visitor_forecasting.config.features import (
     TOTAL_RES_NBR_COL,
     VISITORS_LAST_MONTH,
     VISITORS_DOW,
+    RES_VISITORS_DIFF_COL,
+    VISITORS_DOW_NBRS,
+    RES_IMPOSSIBILITY_COL,
 )
 from recruit_restaurant_visitor_forecasting.config.feature_names import (
     agg_window_col,
@@ -39,17 +43,24 @@ DROP_FEATURES = [
     *[agg_window_col(VISITORS_NBR_COL, MEAN_PREF, n) for n in [7, 14, 28]],
     *[agg_window_col(VISITORS_NBR_COL, MEDIAN_PREF, n) for n in [7, 28]],
     *[agg_window_col(VISITORS_NBR_COL, STD_PREF, n) for n in [7, 14]],
+    *[agg_window_col(RES_VISITORS_DIFF_COL, MEAN_PREF, n) for n in [7, 14, 28]],
     *[agg_window_col(RES_VISITORS_DIFF_NBR_COL, MEAN_PREF, n) for n in [7, 14, 28]],
+    *[agg_exp_col(TOTAL_RES_COL, i) for i in range(39)],
+    RES_VISITORS_DIFF_COL,
     RES_VISITORS_DIFF_NBR_COL,
-    GOLDEN_WEEK_FLG,
+    HOLIDAY_COL,
     OPENED_RECENTLY_FLG,
+    agg_exp_col(VISITORS_DOW, MEAN_PREF),
+    *[agg_exp_col(VISITORS_DOW_NBRS, agg) for agg in [MEAN_PREF, MEDIAN_PREF, STD_PREF]],
 ]
+
 REMAINING_FEATURES = [
     GOLDEN_WEEK_FLG,
     OPEN_USUALLY_COL,
     TOTAL_RES_COL,
     TOTAL_RES_NBR_COL,
     VISITORS_LAST_MONTH,
+    RES_IMPOSSIBILITY_COL,
     agg_window_col(VISITORS_COL, MEDIAN_PREF, 7),
     agg_window_col(VISITORS_COL, STD_PREF, 7),
     agg_window_col(VISITORS_COL, MAX_PREF, 28),

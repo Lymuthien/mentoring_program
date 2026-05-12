@@ -68,3 +68,8 @@ def print_period_problematic_rest(period: str, rest_count: int, all_zero_count: 
     print("[Restaurants with reservation possibility are taken into account]")
     print("Count of restaurants:", rest_count)
     print("Count of restaurants with all 0 reservations:", all_zero_count)
+
+
+def print_best_params(optuna_study):
+    print("Best parameters:", optuna_study.best_params)
+    print(f"Best score: {optuna_study.best_value:.5f}")

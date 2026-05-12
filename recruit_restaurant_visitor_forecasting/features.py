@@ -488,7 +488,7 @@ def add_total_nbr_reservations(
 
     df[RESERVE_HPG_NBR_COL] = df[RESERVE_HPG_NBR_COL].fillna(df["temp"])
     df = df.drop("temp", axis=1)
-    df[TOTAL_RES_NBR_COL] = df[RESERVE_HPG_NBR_COL] + df[RESERVE_AIR_NBR_COL]
+    df[TOTAL_RES_NBR_COL] = df[RESERVE_HPG_NBR_COL] + df[RESERVE_AIR_NBR_COL].fillna(0)
     df[TOTAL_RES_NBR_COL] = df[TOTAL_RES_NBR_COL].fillna(0)
     df = df.drop([RESERVE_HPG_NBR_COL, RESERVE_AIR_NBR_COL], axis=1)
 

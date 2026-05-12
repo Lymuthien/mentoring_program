@@ -8,7 +8,7 @@ FS_VALID_SIZE = 0.2
 
 # LightGBM
 
-OBJECTIVE_FUNCTION = "huber"
+OBJECTIVE_FUNCTION = "regression_l2"
 
 # Optuna
 
