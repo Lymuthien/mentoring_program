@@ -2,7 +2,11 @@ import numpy as np
 import optuna
 import pandas as pd
 import statsmodels.api as sm
-from sklearn.metrics import mean_squared_log_error, mean_squared_error
+from sklearn.metrics import (
+    mean_squared_log_error,
+    mean_squared_error,
+    mean_absolute_error,
+)
 
 
 from recruit_restaurant_visitor_forecasting.config.config import (
@@ -290,7 +294,11 @@ def get_features_difference(
     diff_df.columns = [f"{c}_diff" for c in features]
 
     meta_cols = [
-        AIR_RESTAURANT_ID_COL, VISIT_DATE_COL, VISITORS_COL, f"{VISITORS_COL}_prev"
+        AIR_RESTAURANT_ID_COL,
+        VISIT_DATE_COL,
+        VISITORS_COL,
+        f"{VISITORS_COL}_prev",
+        "predicted",
     ]
     diff_df = pd.concat([merged[meta_cols], diff_df], axis=1)
 
@@ -298,10 +306,12 @@ def get_features_difference(
 
 
 def get_metrics(y_true, y_pred):
-    metrics = pd.Series({
-        "RMSLE": rmsle(y_true, y_pred),
-        "MAE": mean_absolute_error(y_true, y_pred),
-        "MSE": mean_squared_error(y_true, y_pred),
-    })
+    metrics = pd.Series(
+        {
+            "RMSLE": rmsle(y_true, y_pred),
+            "MAE": mean_absolute_error(y_true, y_pred),
+            "MSE": mean_squared_error(y_true, y_pred),
+        }
+    )
 
     return metrics
