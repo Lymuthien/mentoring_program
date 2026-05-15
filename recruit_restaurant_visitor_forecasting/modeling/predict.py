@@ -175,12 +175,17 @@ def recursive_predict(
 
         if update_reservations:
             res_col = agg_exp_col(TOTAL_RES_COL, i + 1)
+            res_nbrs_col = agg_exp_col(TOTAL_RES_NBR_COL, i + 1)
             if res_col in current_features.columns:
                 current_features[TOTAL_RES_COL] = current_features[res_col]
+                current_features[TOTAL_RES_NBR_COL] = current_features[res_nbrs_col]
                 i += 1
             else:
                 current_features[TOTAL_RES_COL] = current_features[
                     agg_exp_col(TOTAL_RES_COL, i)
+                ]
+                current_features[TOTAL_RES_NBR_COL] = current_features[
+                    agg_exp_col(TOTAL_RES_NBR_COL, i)
                 ]
 
         X_current = current_features.drop(columns=[VISITORS_COL])

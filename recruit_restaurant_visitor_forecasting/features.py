@@ -395,30 +395,22 @@ def add_sum_of_reserves(
 
 
 def add_nbrs_reserves(
-    df: pd.DataFrame,
-    reserves_col: str,
-    region_col: str,
-    nbr_col: str,
-    exclude_self: bool = False,
-    fill_na=None,
+    df: pd.DataFrame, reserves_col: str, nbr_col: str, max_res_diff: int = 0
 ) -> pd.DataFrame:
     df = df.copy()
+    nbr_cols = {}
 
-    grouped = df.groupby([region_col, VISIT_DATE_COL])[reserves_col]
-    grp_sum = grouped.transform("sum")
-    grp_count = grouped.transform("count")
+    def get_mean(df: pd.DataFrame, res_col: str):
+        return df.groupby([CITY_COL, VISIT_DATE_COL])[res_col].transform("mean")
 
-    if exclude_self:
-        nbr_count = grp_count - 1
-        nbr_mean = (grp_sum - df[reserves_col]) / nbr_count
-        nbr_mean = nbr_mean.where(nbr_count > 0, np.nan)
-    else:
-        nbr_mean = grp_sum / grp_count
+    nbr_cols[nbr_col] = get_mean(df, reserves_col)
 
-    if fill_na is not None:
-        nbr_mean = nbr_mean.fillna(fill_na)
+    for i in range(max_res_diff):
+        nbr_temp_col = agg_exp_col(nbr_col, i)
+        nbr_cols[nbr_temp_col] = get_mean(df, agg_exp_col(reserves_col, i))
 
-    df[nbr_col] = nbr_mean
+    df = df.assign(**nbr_cols)
+
     return df
 
 
@@ -436,18 +428,18 @@ def add_total_reservations(
         .drop(HPG_RESTAURANT_ID_COL, axis=1)
     )
 
-    pairs = [(RESERVE_AIR_COL, RESERVE_HPG_COL)]
-    pairs += [
+    pairs = [
         (agg_exp_col(RESERVE_AIR_COL, i), agg_exp_col(RESERVE_HPG_COL, i))
         for i in range(max_res_diff)
     ]
+    pairs += [(RESERVE_AIR_COL, RESERVE_HPG_COL)]
     cols = [col for pair in pairs for col in pair]
     df[cols] = df[cols].fillna(0)
     total_cols = {}
 
-    for i, (air_col, hpg_col) in enumerate(pairs):
-        total = TOTAL_RES_COL if i == 0 else agg_exp_col(TOTAL_RES_COL, i)
-
+    total_cols[TOTAL_RES_COL] = df[pairs[0][0]] + df[pairs[0][1]]
+    for i, (air_col, hpg_col) in enumerate(pairs[:-1]):
+        total = agg_exp_col(TOTAL_RES_COL, i + 1)
         total_cols[total] = df[air_col] + df[hpg_col]
 
     df = pd.concat([df, pd.DataFrame(total_cols, index=df.index)], axis=1)
@@ -475,22 +467,33 @@ def remove_repetitions(air: pd.DataFrame, hpg: pd.DataFrame) -> pd.DataFrame:
 
 
 def add_total_nbr_reservations(
-    df: pd.DataFrame, hpg_res: pd.DataFrame, region_col: str
+    df: pd.DataFrame, air_res, hpg_res: pd.DataFrame, max_res_diff: int = 0
 ) -> pd.DataFrame:
-    df = df.merge(
-        hpg_res.groupby([VISIT_DATE_COL, region_col])[RESERVE_HPG_NBR_COL]
-        .median()
-        .rename("temp"),
-        left_on=[VISIT_DATE_COL, region_col],
-        right_index=True,
-        how="left",
-    )
+    grouping = [VISIT_DATE_COL, CITY_COL]
 
-    df[RESERVE_HPG_NBR_COL] = df[RESERVE_HPG_NBR_COL].fillna(df["temp"])
-    df = df.drop("temp", axis=1)
-    df[TOTAL_RES_NBR_COL] = df[RESERVE_HPG_NBR_COL] + df[RESERVE_AIR_NBR_COL].fillna(0)
-    df[TOTAL_RES_NBR_COL] = df[TOTAL_RES_NBR_COL].fillna(0)
-    df = df.drop([RESERVE_HPG_NBR_COL, RESERVE_AIR_NBR_COL], axis=1)
+    def get_daily_city_mean(df: pd.DataFrame, col: str):
+        cols = [agg_exp_col(col, i) for i in range(max_res_diff)] + [col]
+        return df.groupby(grouping)[cols].mean().reset_index(), cols
+
+    hpg_grouped, hpg_cols = get_daily_city_mean(hpg_res, RESERVE_HPG_NBR_COL)
+    if hpg_cols[0] in df.columns:
+        df = df.drop(columns=hpg_cols)
+    df = df.merge(hpg_grouped, on=grouping, how="left")
+
+    air_grouped, air_cols = get_daily_city_mean(air_res, RESERVE_AIR_NBR_COL)
+    if air_cols[0] in df.columns:
+        df = df.drop(columns=air_cols)
+    df = df.merge(air_grouped, on=grouping, how="left")
+
+    nbr_cols = {}
+    nbr_cols[TOTAL_RES_NBR_COL] = df[hpg_cols[0]].fillna(0) + df[air_cols[0]].fillna(0)
+    for i, (hpg, air) in enumerate(zip(hpg_cols[:-1], air_cols[:-1])):
+        col = agg_exp_col(TOTAL_RES_NBR_COL, i + 1)
+        nbr_cols[col] = df[hpg].fillna(0) + df[air].fillna(0)
+
+    df = df.copy()
+    df = df.assign(**nbr_cols)
+    df = df.drop(columns=[*hpg_cols, *air_cols])
 
     return df
 
