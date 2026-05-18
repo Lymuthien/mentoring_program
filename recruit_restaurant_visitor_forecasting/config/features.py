@@ -46,6 +46,7 @@ VISITORS_DOW_NBRS = VISITORS_NBR_COL + DOW_SUFFIX
 
 # Reserve columns
 
+RES_OFFSET = "reservation_offset"
 RESERVE_AIR_COL = "air_reserves"
 RESERVE_HPG_COL = "hpg_reserves"
 RESERVE_AIR_NBR_COL = RESERVE_AIR_COL + NBRS_SUFFIX

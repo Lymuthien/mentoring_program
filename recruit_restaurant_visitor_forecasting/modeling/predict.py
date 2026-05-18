@@ -24,6 +24,7 @@ from recruit_restaurant_visitor_forecasting.config.features import (
     VISITORS_DOW_NBRS,
     DOW_WINDOW,
     VISITORS_LAST_MONTH,
+    RES_OFFSET,
 )
 from recruit_restaurant_visitor_forecasting.features import (
     add_lags,
@@ -152,7 +153,7 @@ def recursive_predict(
 
     test_dates = sorted(test_features[VISIT_DATE_COL].unique())
     result = pd.Series(index=test_features.index, dtype=float)
-    i = 0
+    i = 1
 
     for date in tqdm(test_dates, desc="Predicting recursively"):
         updated_features = update_features_for_date(combined, date, **kwargs)
@@ -171,22 +172,26 @@ def recursive_predict(
         current_features = combined[date_mask]
         numeric_cols = current_features.select_dtypes(include="number").columns
         mean = current_features[numeric_cols].mean()
-        current_features[numeric_cols] = current_features[numeric_cols].fillna(mean)
+        # current_features[numeric_cols] = current_features[numeric_cols].fillna(mean)
 
         if update_reservations:
-            res_col = agg_exp_col(TOTAL_RES_COL, i + 1)
-            res_nbrs_col = agg_exp_col(TOTAL_RES_NBR_COL, i + 1)
+            res_col = agg_exp_col(TOTAL_RES_COL, i)
+            res_nbrs_col = agg_exp_col(TOTAL_RES_NBR_COL, i)
             if res_col in current_features.columns:
                 current_features[TOTAL_RES_COL] = current_features[res_col]
                 current_features[TOTAL_RES_NBR_COL] = current_features[res_nbrs_col]
+                if RES_OFFSET in current_features.columns:
+                    current_features[RES_OFFSET] = i
                 i += 1
             else:
                 current_features[TOTAL_RES_COL] = current_features[
-                    agg_exp_col(TOTAL_RES_COL, i)
+                    agg_exp_col(TOTAL_RES_COL, i - 1)
                 ]
                 current_features[TOTAL_RES_NBR_COL] = current_features[
-                    agg_exp_col(TOTAL_RES_NBR_COL, i)
+                    agg_exp_col(TOTAL_RES_NBR_COL, i - 1)
                 ]
+                if RES_OFFSET in current_features.columns:
+                    current_features[RES_OFFSET] = i - 1
 
         X_current = current_features.drop(columns=[VISITORS_COL])
         y_pred = model.predict(X_current)
