@@ -76,6 +76,7 @@ def update_features_for_date(
     res_visitors_diff_nbr: bool = False,
     res_visitors_diff: bool = False,
     visitors_dow_nbr: bool = False,
+    update_dow_agg: bool = True,
 ) -> pd.DataFrame:
     id_col = AIR_RESTAURANT_ID_COL
 
@@ -111,7 +112,8 @@ def update_features_for_date(
     )
 
     aggs = [MEAN_PREF, MEDIAN_PREF, STD_PREF]
-    df, _ = add_dow_cum_agg(df, VISITORS_COL, VISITORS_DOW, aggs)
+    if update_dow_agg:
+        df, _ = add_dow_cum_agg(df, VISITORS_COL, VISITORS_DOW, aggs)
     if visitors_dow_nbr:
         df, _ = add_dow_cum_agg(df, VISITORS_NBR_COL, VISITORS_DOW_NBRS, aggs)
     df = add_dow_rol_agg(df, VISITORS_COL, VISITORS_DOW, aggs, DOW_WINDOW)
@@ -144,6 +146,7 @@ def recursive_predict(
     train_labels: pd.Series,
     drop_cols: list = None,
     update_reservations: bool = True,
+    update_dow_agg: bool = True,
     **kwargs,
 ) -> tuple[pd.Series, pd.DataFrame]:
     combined = pd.concat([train_features, test_features], ignore_index=True)
@@ -156,7 +159,7 @@ def recursive_predict(
     i = 1
 
     for date in tqdm(test_dates, desc="Predicting recursively"):
-        updated_features = update_features_for_date(combined, date, **kwargs)
+        updated_features = update_features_for_date(combined, date, update_dow_agg=update_dow_agg, **kwargs)
 
         missing_cols = updated_features.columns.difference(combined.columns)
         if not missing_cols.empty:
@@ -170,9 +173,6 @@ def recursive_predict(
         ].values
 
         current_features = combined[date_mask]
-        numeric_cols = current_features.select_dtypes(include="number").columns
-        mean = current_features[numeric_cols].mean()
-        # current_features[numeric_cols] = current_features[numeric_cols].fillna(mean)
 
         if update_reservations:
             res_col = agg_exp_col(TOTAL_RES_COL, i)
