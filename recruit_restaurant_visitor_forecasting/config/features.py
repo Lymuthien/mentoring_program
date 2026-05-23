@@ -28,6 +28,8 @@ MIN_PREF = "min"
 
 PERCENTAGE_COL = "percentage"
 GOLDEN_WEEK_FLG = "golden_week_flg"
+WEEK_AFTER_GW = "week_after_gw_flg"
+HOL_TO_WORKDAY_FLG = "holiday_to_workday_flg"
 CITY_COL = "city"
 CITY_REGION_COL = "city_region"
 

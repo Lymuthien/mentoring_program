@@ -49,6 +49,8 @@ from recruit_restaurant_visitor_forecasting.config.features import (
     LAGS,
     CLOSED_FLG,
     VISITORS_LAST_MONTH,
+    HOL_TO_WORKDAY_FLG,
+    WEEK_AFTER_GW
 )
 from recruit_restaurant_visitor_forecasting.config.feature_names import (
     nbrs_col,
@@ -533,7 +535,7 @@ def add_basic_stats(
         for agg, agg_kwargs in aggs:
             col = agg_window_col(target_col, agg, window)
             df[col] = r.agg(agg, **agg_kwargs).reset_index(level=0, drop=True)
-            df[col] = df[col].fillna(0)
+            # df[col] = df[col].fillna(0)
 
     return df
 
@@ -948,4 +950,42 @@ def add_closed_flg(df: pd.DataFrame) -> pd.DataFrame:
     threshold_dates = df[AIR_RESTAURANT_ID_COL].map(last_dates)
     df[CLOSED_FLG] = (df[VISIT_DATE_COL] > threshold_dates).astype(int)
 
+    return df
+
+
+def add_week_after_gw(df: pd.DataFrame, date_col: str) -> pd.DataFrame:
+    df = df.copy()
+
+    gw_mask = df[GOLDEN_WEEK_FLG] == 1
+    gw_last = df[gw_mask][date_col].max()
+    post_gw_last = gw_last + pd.Timedelta(days=7)
+
+    df[WEEK_AFTER_GW] = (
+        (df[date_col] > gw_last) & (df[date_col] <= post_gw_last)
+    ).astype(int)
+    return df
+
+
+def add_week_after_gw(df: pd.DataFrame, date_col: str) -> pd.DataFrame:
+    df = df.copy()
+    df["year"] = df[date_col].dt.year
+
+    gw_mask = df[GOLDEN_WEEK_FLG] == 1
+    gw_periods = df[gw_mask].groupby(df["year"])[date_col].max().rename("gw_last")
+    gw_periods = gw_periods.reset_index()
+    gw_periods["post_gw_last"] = gw_periods["gw_last"] + pd.Timedelta(days=7)
+
+    df = df.merge(gw_periods, on="year")
+    df[WEEK_AFTER_GW] = (
+        (df[date_col] > df["gw_last"]) & (df[date_col] <= df["post_gw_last"])
+    ).astype(int)
+
+    return df.drop(columns=["year", "gw_last", "post_gw_last"])
+
+
+def add_hol_to_workday(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+
+    hol = df[HOLIDAY_COL]
+    df[HOL_TO_WORKDAY_FLG] = (hol - hol.shift(-1) == 1).astype(int)
     return df

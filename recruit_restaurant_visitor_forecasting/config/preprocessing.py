@@ -27,6 +27,9 @@ from recruit_restaurant_visitor_forecasting.config.features import (
     RES_VISITORS_DIFF_COL,
     VISITORS_DOW_NBRS,
     RES_IMPOSSIBILITY_COL,
+    RES_OFFSET,
+    WEEK_AFTER_GW,
+    HOL_TO_WORKDAY_FLG,
 )
 from recruit_restaurant_visitor_forecasting.config.feature_names import (
     agg_window_col,
@@ -56,7 +59,10 @@ DROP_FEATURES = [
 ]
 
 REMAINING_FEATURES = [
+    RES_OFFSET,
     GOLDEN_WEEK_FLG,
+    WEEK_AFTER_GW,
+    HOL_TO_WORKDAY_FLG,
     OPEN_USUALLY_COL,
     TOTAL_RES_COL,
     TOTAL_RES_NBR_COL,
@@ -85,3 +91,4 @@ DROP_COLUMNS = [
 EMPTY_DATES_RANGE = pd.date_range(start="2016-07-26", end="2016-10-26").tolist()
 VARIANCE_FS_THRESHOLD = 0.01
 TARGET_CORR_THRESHOLD = 0.2
+RES_MAX_OFFSET = 39
