@@ -25,6 +25,8 @@ from recruit_restaurant_visitor_forecasting.config.features import (
     PRED_MEAN,
     RES_IMPOSSIBILITY_COL,
     TOTAL_RES_COL,
+    TOTAL_RES_NBR_COL,
+    RES_OFFSET
 )
 from recruit_restaurant_visitor_forecasting.features import add_sum_of_reserves
 
@@ -315,3 +317,23 @@ def get_metrics(y_true, y_pred):
     )
 
     return metrics
+
+
+def mix_reservation_features(
+    df: pd.DataFrame, max_suffix: int = 39, seed: int = 42
+) -> pd.DataFrame:
+    rng = np.random.default_rng(seed)
+    df = df.copy()
+    n = len(df)
+
+    suffixes = rng.integers(1, max_suffix + 1, size=n)
+    row_idx = np.arange(n)
+
+    for base in [TOTAL_RES_COL, TOTAL_RES_NBR_COL]:
+        cols = [f"{base}_{i}" for i in range(1, max_suffix + 1)]
+        values = df[cols].to_numpy()
+        df[base] = values[row_idx, suffixes - 1]
+
+    df[RES_OFFSET] = suffixes
+
+    return df
