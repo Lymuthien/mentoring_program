@@ -3,7 +3,7 @@ import pandas as pd
 
 from sklearn.base import clone
 from joblib import Parallel, delayed
-from recruit_restaurant_visitor_forecasting.config.preprocessing import DROP_COLUMNS
+from recruit_restaurant_visitor_forecasting.config.config import VISIT_DATE_COL
 from recruit_restaurant_visitor_forecasting.modeling.predict import recursive_predict
 
 
@@ -65,6 +65,8 @@ def _run_one_fold(
     train_idx: np.ndarray,
     val_idx: np.ndarray,
     scoring,
+    X_full: pd.DataFrame = None,
+    y_full: pd.Series = None,
 ):
     X_train = X.iloc[train_idx]
     y_train = y.iloc[train_idx]
@@ -75,12 +77,16 @@ def _run_one_fold(
     model_ = clone(model)
     model_.fit(X_train, y_train)
 
+    if X_full is not None:
+        min_label = X.index[val_idx.min()]
+        X_train = X_full.loc[:min_label - 1]
+        y_train = y_full.loc[:min_label - 1]
+
     y_pred, _ = recursive_predict(
         model=model_,
         train_features=X_train,
         train_labels=y_train,
-        test_features=X_val,
-        drop_cols=DROP_COLUMNS,
+        test_features=X_val
     )
 
     return scoring(y_val, y_pred)
@@ -94,6 +100,8 @@ def cv_recursive_score(
     scoring,
     n_jobs: int = 1,
     verbose: int = 0,
+    X_full: pd.DataFrame = None,
+    y_full: pd.Series = None,
 ):
     splits = list(cv.split(X))
 
@@ -109,8 +117,37 @@ def cv_recursive_score(
             train_idx,
             val_idx,
             scoring,
+            X_full,
+            y_full,
         )
         for train_idx, val_idx in splits
     )
 
     return np.asarray(scores)
+
+
+def score_extra_dates(
+    model,
+    X: pd.DataFrame,
+    y: pd.Series,
+    date_range: pd.DatetimeIndex,
+    scoring,
+    date_col: str = VISIT_DATE_COL,
+) -> float:
+    train_mask = X[date_col] < date_range.min()
+    test_mask = X[date_col].isin(date_range)
+
+    X_train, y_train = X.loc[train_mask], y.loc[train_mask]
+    X_val, y_val = X.loc[test_mask], y.loc[test_mask]
+
+    model_ = clone(model)
+    model_.fit(X_train, y_train)
+
+    y_pred, _ = recursive_predict(
+        model=model_,
+        train_features=X_train,
+        train_labels=y_train,
+        test_features=X_val,
+    )
+
+    return scoring(y_val, y_pred)
