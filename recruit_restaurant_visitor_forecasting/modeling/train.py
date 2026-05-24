@@ -11,11 +11,12 @@ from typing import Optional, Union
 from recruit_restaurant_visitor_forecasting.config.config import (
     AIR_RESTAURANT_ID_COL,
     VISIT_DATE_COL,
-    PROCESSED_DATA_DIR
+    PROCESSED_DATA_DIR,
 )
 from recruit_restaurant_visitor_forecasting.modeling.cv import (
     ExpandingWindowSplit,
     cv_recursive_score,
+    score_extra_dates,
 )
 from recruit_restaurant_visitor_forecasting.modeling.pipeline import (
     build_lgbm_pipeline,
@@ -157,6 +158,9 @@ def lgbm_optuna_search(
     window_test_size: int = 1,
     mlflow_run_name: str = "study",
     objective_func: str = "regression",
+    extra_score_date: pd.DatetimeIndex = None,
+    X_full: pd.DataFrame = None,
+    y_full: pd.Series = None,
 ) -> tuple[optuna.Study, Pipeline]:
     drop_features = drop_features or []
 
@@ -175,7 +179,7 @@ def lgbm_optuna_search(
             "n_estimators": trial.suggest_int("model__n_estimators", 100, 1000),
             "subsample": trial.suggest_float("model__subsample", 0.5, 1),
             "colsample_bytree": trial.suggest_float("model__colsample_bytree", 0.7, 1),
-            "min_child_samples": trial.suggest_int("model__min_child_samples", 10, 35),
+            "min_child_samples": trial.suggest_int("model__min_child_samples", 40, 200),
             "reg_alpha": trial.suggest_float("model__reg_alpha", 1e-4, 10, log=True),
             "reg_lambda": trial.suggest_float("model__reg_lambda", 1e-4, 10, log=True),
         }
@@ -183,6 +187,10 @@ def lgbm_optuna_search(
         params["num_leaves"] = trial.suggest_int(
             f"model__num_leaves", 2**max_depth // 2, 2**max_depth
         )
+        if objective_func == "tweedie":
+            params["tweedie_variance_power"] = trial.suggest_float(
+                "model__tweedie_variance_power", 1.1, 1.9
+            ),
 
         pipeline = build_lgbm_pipeline(
             drop_features, random_state, features_top, objective=objective_func
@@ -195,8 +203,13 @@ def lgbm_optuna_search(
             pipeline.set_params(**fd_params)
 
         cv_scores = cv_recursive_score(
-            pipeline, X, y, cv=tscv, scoring=scoring, n_jobs=5
+            pipeline, X, y, tscv, scoring, n_jobs=5, X_full=X_full, y_full=y_full
         )
+
+        if extra_score_date is not None:
+            extra_score = score_extra_dates(pipeline, X, y, extra_score_date, scoring)
+            cv_scores = np.append(cv_scores, extra_score)
+
         trial.set_user_attr("cv_scores", cv_scores.tolist())
 
         return _score_mean(cv_scores, scoring)

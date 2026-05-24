@@ -26,6 +26,7 @@ from recruit_restaurant_visitor_forecasting.config.features import (
     PRED_MEAN,
     CITY_COL,
     CITY_REGION_COL,
+    ERROR_COL
 )
 from recruit_restaurant_visitor_forecasting.utils import (
     calc_errors,
@@ -358,11 +359,11 @@ def _plot_error(axes, df: pd.DataFrame, group: str):
     axes.grid(True, alpha=0.3)
 
 
-def _hist_error(axes, df: pd.DataFrame, group: str):
-    axes.hist(df[MEAN_ERROR], alpha=0.7)
+def _hist_error(axes, df: pd.DataFrame, group: str, col: str = MEAN_ERROR):
+    axes.hist(df[col], alpha=0.7)
     axes.set_title(f"Error distribution: {group}")
     axes.set_xlabel("Error")
-    axes.set_ylabel("Count of days with this mean error")
+    axes.set_ylabel("Frequency")
     axes.grid(True, alpha=0.3)
 
 
@@ -406,7 +407,10 @@ def plot_daily_error_overall(
     _plot_error(ax_ts, daily_errors, group)
 
     ax_hist = fig.add_subplot(gs[1, :2])
-    _hist_error(ax_hist, daily_errors, group)
+    error_df[ERROR_COL] = error_df[ERROR_COL][
+        get_non_outliers_mask(error_df[ERROR_COL])
+    ]
+    _hist_error(ax_hist, error_df, group, ERROR_COL)
 
     ax_acf = fig.add_subplot(gs[1, 2:])
     _plot_error_acf(ax_acf, daily_errors, group)

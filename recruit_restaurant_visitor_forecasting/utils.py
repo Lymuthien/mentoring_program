@@ -26,7 +26,8 @@ from recruit_restaurant_visitor_forecasting.config.features import (
     RES_IMPOSSIBILITY_COL,
     TOTAL_RES_COL,
     TOTAL_RES_NBR_COL,
-    RES_OFFSET
+    RES_OFFSET,
+    ERROR_COL
 )
 from recruit_restaurant_visitor_forecasting.features import add_sum_of_reserves
 from recruit_restaurant_visitor_forecasting.config.feature_names import agg_window_col
@@ -36,7 +37,6 @@ STD_ERROR = "std_error"
 MIN_ABS_ERROR = "min_abs_error"
 MAX_POS_ERROR = "max_pos_error"
 MAX_NEG_ERROR = "max_neg_error"
-ERROR_COL = "error"
 
 
 def get_dfs_daily_corr(
@@ -281,31 +281,6 @@ def get_res_vis_corr(df: pd.DataFrame, res_df: pd.DataFrame) -> float:
 def get_rmsle(group, cols: list[str], actual: str) -> pd.Series:
     scores = {c + RMSLE_SUFFIX: rmsle(group[actual], group[c]) for c in cols}
     return pd.Series(scores)
-
-
-def get_features_difference(
-    top_df: pd.DataFrame, down_df: pd.DataFrame, day_diff: int, features: list
-) -> pd.DataFrame:
-    down_shifted = down_df.copy()
-    down_shifted[VISIT_DATE_COL] += pd.Timedelta(days=day_diff)
-
-    merged = top_df.merge(
-        down_shifted, on=[AIR_RESTAURANT_ID_COL, VISIT_DATE_COL], suffixes=("", "_prev")
-    ).sample(n=10, random_state=42)
-
-    diff_df = merged[features].sub(merged[[f"{c}_prev" for c in features]].values)
-    diff_df.columns = [f"{c}_diff" for c in features]
-
-    meta_cols = [
-        AIR_RESTAURANT_ID_COL,
-        VISIT_DATE_COL,
-        VISITORS_COL,
-        f"{VISITORS_COL}_prev",
-        "predicted",
-    ]
-    diff_df = pd.concat([merged[meta_cols], diff_df], axis=1)
-
-    return diff_df
 
 
 def get_metrics(y_true, y_pred):

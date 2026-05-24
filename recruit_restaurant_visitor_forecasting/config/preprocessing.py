@@ -76,8 +76,6 @@ REMAINING_FEATURES = [
     *[agg_window_col(VISITORS_COL, MIN_PREF, n) for n in [7, 14, 28]],
     *[agg_exp_col(VISITORS_DOW, agg) for agg in [MEDIAN_PREF, STD_PREF]],
     *[lag_col(VISITORS_COL, lag) for lag in [1, 7, 28]],
-    agg_window_col(TOTAL_RES_COL, MEAN_PREF, 7),
-    agg_window_col(TOTAL_RES_NBR_COL, MEAN_PREF, 7),
 ]
 
 DROP_COLUMNS = [

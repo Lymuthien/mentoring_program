@@ -40,6 +40,7 @@ from recruit_restaurant_visitor_forecasting.config.feature_names import (
     lag_col,
     nbrs_col,
     agg_exp_col,
+    agg_window_col,
 )
 
 
@@ -175,23 +176,18 @@ def recursive_predict(
         current_features = combined[date_mask]
 
         if update_reservations:
+            res_cols = [TOTAL_RES_COL, TOTAL_RES_NBR_COL]
+            agg_cols = [agg_window_col(col, MEAN_PREF, 7) for col in res_cols]
+            cols = [*res_cols, *agg_cols]
             res_col = agg_exp_col(TOTAL_RES_COL, i)
-            res_nbrs_col = agg_exp_col(TOTAL_RES_NBR_COL, i)
-            if res_col in current_features.columns:
-                current_features[TOTAL_RES_COL] = current_features[res_col]
-                current_features[TOTAL_RES_NBR_COL] = current_features[res_nbrs_col]
-                if RES_OFFSET in current_features.columns:
-                    current_features[RES_OFFSET] = i
+            offset = i if res_col in current_features.columns else i - 1
+
+            for col in cols:
+                current_features[col] = current_features[agg_exp_col(col, offset)]
+            current_features[RES_OFFSET] = offset
+
+            if offset == i:
                 i += 1
-            else:
-                current_features[TOTAL_RES_COL] = current_features[
-                    agg_exp_col(TOTAL_RES_COL, i - 1)
-                ]
-                current_features[TOTAL_RES_NBR_COL] = current_features[
-                    agg_exp_col(TOTAL_RES_NBR_COL, i - 1)
-                ]
-                if RES_OFFSET in current_features.columns:
-                    current_features[RES_OFFSET] = i - 1
 
         X_current = current_features.drop(columns=[VISITORS_COL])
         y_pred = model.predict(X_current)
@@ -199,9 +195,7 @@ def recursive_predict(
 
         combined.loc[current_features.index, VISITORS_COL] = y_pred
 
-        test_date_mask = test_features[VISIT_DATE_COL] == date
-        test_date_df = test_features[test_date_mask]
-        test_date_indices = test_date_df.index
-        result.loc[test_date_indices] = y_pred
+        test_date_df = test_features[test_features[VISIT_DATE_COL] == date]
+        result.loc[test_date_df.index] = y_pred
 
     return result, combined

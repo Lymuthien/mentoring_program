@@ -64,6 +64,7 @@ DAYS_OF_WEEK = ["Mon", "Tue", "Wed", "Th", "Fri", "Sat", "Sun"]
 
 ACTUAL_MEAN = "actual_mean"
 PRED_MEAN = "predicted_mean"
+ERROR_COL = "error"
 
 CITY_DIV_N = 1
 CITY_REGION_DIV_N = 2
