@@ -29,6 +29,7 @@ from recruit_restaurant_visitor_forecasting.config.features import (
     RES_OFFSET
 )
 from recruit_restaurant_visitor_forecasting.features import add_sum_of_reserves
+from recruit_restaurant_visitor_forecasting.config.feature_names import agg_window_col
 
 MEAN_ERROR = "mean_error"
 STD_ERROR = "std_error"
@@ -320,7 +321,7 @@ def get_metrics(y_true, y_pred):
 
 
 def mix_reservation_features(
-    df: pd.DataFrame, max_suffix: int = 39, seed: int = 42
+    df: pd.DataFrame, max_suffix: int, seed: int = 42
 ) -> pd.DataFrame:
     rng = np.random.default_rng(seed)
     df = df.copy()
@@ -328,8 +329,10 @@ def mix_reservation_features(
 
     suffixes = rng.integers(1, max_suffix + 1, size=n)
     row_idx = np.arange(n)
+    cols = [TOTAL_RES_COL, TOTAL_RES_NBR_COL]
+    agg_cols = [agg_window_col(col, "mean", 7) for col in cols]
 
-    for base in [TOTAL_RES_COL, TOTAL_RES_NBR_COL]:
+    for base in [*cols, *agg_cols]:
         cols = [f"{base}_{i}" for i in range(1, max_suffix + 1)]
         values = df[cols].to_numpy()
         df[base] = values[row_idx, suffixes - 1]

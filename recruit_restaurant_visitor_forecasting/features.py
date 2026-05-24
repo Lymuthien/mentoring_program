@@ -50,7 +50,7 @@ from recruit_restaurant_visitor_forecasting.config.features import (
     CLOSED_FLG,
     VISITORS_LAST_MONTH,
     HOL_TO_WORKDAY_FLG,
-    WEEK_AFTER_GW
+    WEEK_AFTER_GW,
 )
 from recruit_restaurant_visitor_forecasting.config.feature_names import (
     nbrs_col,
@@ -988,4 +988,43 @@ def add_hol_to_workday(df: pd.DataFrame) -> pd.DataFrame:
 
     hol = df[HOLIDAY_COL]
     df[HOL_TO_WORKDAY_FLG] = (hol - hol.shift(-1) == 1).astype(int)
+    return df
+
+
+def fill_agg_cols(
+    df_new: pd.DataFrame, df_old: pd.DataFrame, cols: list
+) -> pd.DataFrame:
+    grouping = [AIR_RESTAURANT_ID_COL, DAY_OF_WEEK_COL]
+    cols_last = df_old.groupby(grouping)[cols].last().reset_index()
+
+    df_new = df_new.drop(columns=cols, errors="ignore")
+    df_new = df_new.merge(cols_last, on=grouping, how="left")
+
+    return df_new
+
+
+def add_rolling_res(
+    df: pd.DataFrame,
+    max_offset: int,
+    col: str,
+    window: int,
+    ref_df: pd.DataFrame = None,
+) -> pd.DataFrame:
+    df_len = None
+    if ref_df is not None:
+        df_len = len(df)
+        df = pd.concat([ref_df, df], ignore_index=True)
+
+    shifted = df.groupby([AIR_RESTAURANT_ID_COL]).shift(1)
+    rolling = shifted.groupby(df[AIR_RESTAURANT_ID_COL]).rolling(window)
+    agg_col = agg_window_col(col, MEAN_PREF, window)
+    df = df.copy()
+
+    for i in range(1, max_offset + 1):
+        new_col = agg_exp_col(agg_col, i)
+        df[new_col] = rolling[agg_exp_col(col, i)].mean().reset_index(level=0, drop=True)
+
+    df[agg_col] = df[agg_exp_col(agg_col, 1)]
+    if df_len is not None:
+        df = df.tail(df_len).reset_index(drop=True)
     return df
