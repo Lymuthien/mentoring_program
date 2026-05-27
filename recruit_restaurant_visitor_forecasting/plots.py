@@ -35,6 +35,7 @@ from recruit_restaurant_visitor_forecasting.utils import (
     calc_daily_mean_by_group,
     MEAN_ERROR,
     STD_ERROR,
+    get_non_outliers_mask,
 )
 
 CITY_STR = "City"
@@ -425,12 +426,17 @@ def plot_daily_error_by_group(
     error_df = calc_errors(features, y_test, y_pred)
     daily_errors = calc_daily_errors_by_group(error_df, group_col)
     daily_means = calc_daily_mean_by_group(error_df, group_col)
-    n_cols = 4
+    n_cols = 2
 
     groups = daily_errors[group_col].unique()
     n_groups = len(groups)
 
-    fig, axes = plt.subplots(n_groups, n_cols, figsize=(n_cols * 5, n_groups * 5))
+    fig, axes = plt.subplots(
+        n_groups,
+        n_cols,
+        figsize=(n_cols * 10, n_groups * 5),
+        gridspec_kw={"width_ratios": [1, 3]}
+    )
     axes = axes.flatten()
 
     for idx, group in enumerate(groups):
@@ -438,18 +444,12 @@ def plot_daily_error_by_group(
         group_data = daily_errors[daily_errors[group_col] == group]
         group_mean = daily_means[daily_means[group_col] == group]
 
-        ax_ts = axes[n_cols * idx]
-        _plot_error(ax_ts, group_data, group_str)
-        ax_ts.tick_params(axis="x", labelrotation=45)
-
-        ax_hist = axes[n_cols * idx + 1]
-        _hist_error(ax_hist, group_data, group_str)
-
-        ax_acf = axes[n_cols * idx + 2]
+        ax_acf = axes[n_cols * idx]
         _plot_error_acf(ax_acf, group_data, group_str)
 
-        ax_dm = axes[n_cols * idx + 3]
+        ax_dm = axes[n_cols * idx + 1]
         plot_actual_pred(ax_dm, group_mean, group_str)
+        ax_dm.tick_params(axis="x", labelrotation=45)
 
     plt.tight_layout()
     plt.show()

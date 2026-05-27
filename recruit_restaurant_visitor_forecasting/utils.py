@@ -171,7 +171,7 @@ def calc_errors(
     if AIR_GENRE_COL in features.columns:
         error_df[AIR_GENRE_COL] = features[AIR_GENRE_COL]
 
-    error_df[ERROR_COL] = y_pred - y_test
+    error_df[ERROR_COL] = y_test - y_pred
     error_df[PRED_MEAN] = y_pred.values
     error_df[ACTUAL_MEAN] = y_test.values
 
@@ -296,7 +296,7 @@ def get_metrics(y_true, y_pred):
 
 
 def mix_reservation_features(
-    df: pd.DataFrame, max_suffix: int, seed: int = 42
+    df: pd.DataFrame, max_suffix: int, seed: int = 42, include_agg: bool = False
 ) -> pd.DataFrame:
     rng = np.random.default_rng(seed)
     df = df.copy()
@@ -306,8 +306,10 @@ def mix_reservation_features(
     row_idx = np.arange(n)
     cols = [TOTAL_RES_COL, TOTAL_RES_NBR_COL]
     agg_cols = [agg_window_col(col, "mean", 7) for col in cols]
+    if include_agg:
+        cols += agg_cols
 
-    for base in [*cols, *agg_cols]:
+    for base in cols:
         cols = [f"{base}_{i}" for i in range(1, max_suffix + 1)]
         values = df[cols].to_numpy()
         df[base] = values[row_idx, suffixes - 1]

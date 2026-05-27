@@ -145,7 +145,6 @@ def recursive_predict(
     test_features: pd.DataFrame,
     train_features: pd.DataFrame,
     train_labels: pd.Series,
-    drop_cols: list = None,
     update_reservations: bool = True,
     update_dow_agg: bool = True,
     **kwargs,
@@ -174,15 +173,16 @@ def recursive_predict(
         ].values
 
         current_features = combined[date_mask]
+        cols = current_features.columns
 
         if update_reservations:
             res_cols = [TOTAL_RES_COL, TOTAL_RES_NBR_COL]
             agg_cols = [agg_window_col(col, MEAN_PREF, 7) for col in res_cols]
-            cols = [*res_cols, *agg_cols]
-            res_col = agg_exp_col(TOTAL_RES_COL, i)
-            offset = i if res_col in current_features.columns else i - 1
+            res_mean_col = agg_window_col(TOTAL_RES_COL, MEAN_PREF, 7)
+            offset = i if agg_exp_col(TOTAL_RES_COL, i) in cols else i - 1
+            res_cols += agg_cols if res_mean_col in cols else []
 
-            for col in cols:
+            for col in res_cols:
                 current_features[col] = current_features[agg_exp_col(col, offset)]
             current_features[RES_OFFSET] = offset
 
