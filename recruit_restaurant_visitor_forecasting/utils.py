@@ -317,3 +317,12 @@ def mix_reservation_features(
     df[RES_OFFSET] = suffixes
 
     return df
+
+
+def get_median_feature_diff(df_a: pd.DataFrame, df_b: pd.DataFrame, columns: list[str]):
+    cmp = pd.DataFrame({
+        "median_A": df_a[columns].median(numeric_only=True),
+        "median_B": df_b[columns].median(numeric_only=True),
+    })
+    cmp["diff_B_minus_A"] = cmp["median_B"] - cmp["median_A"]
+    return cmp.sort_values("diff_B_minus_A", ascending=False)
