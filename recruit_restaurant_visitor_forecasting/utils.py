@@ -326,3 +326,11 @@ def get_median_feature_diff(df_a: pd.DataFrame, df_b: pd.DataFrame, columns: lis
     })
     cmp["diff_B_minus_A"] = cmp["median_B"] - cmp["median_A"]
     return cmp.sort_values("diff_B_minus_A", ascending=False)
+
+
+def max_periodic_zero_rate(series: pd.Series, period: int) -> float:
+    return max(
+        (series[offset::period] == 0).mean()
+        for offset in range(period)
+        if len(series[offset::period]) > 0
+    )
