@@ -1,0 +1,77 @@
+from recruit_restaurant_visitor_forecasting.config.config import VISITORS_COL
+
+# Seasonal columns
+
+YEAR_COL = "year"
+MONTH_COL = "month"
+WEEK_COL = "week"
+DAY_OF_WEEK_COL = "day_of_week"
+DAY_STR_COL = "day_str"
+YEAR_MONTH_COL = "year_month"
+DAY_COL = "day"
+
+# Feature columns
+
+AIR_DAILY_COL = "air_daily"
+HPG_DAILY_COL = "hpg_daily"
+
+GENRE_TE = "air_genre_te"
+AREA_TE = "air_city_te"
+
+NBRS_SUFFIX = "_nbrs"
+DOW_SUFFIX = "_dow"
+MEAN_PREF= "mean"
+MEDIAN_PREF = "median"
+STD_PREF = "std"
+MAX_PREF = "max"
+MIN_PREF = "min"
+
+PERCENTAGE_COL = "percentage"
+GOLDEN_WEEK_FLG = "golden_week_flg"
+WEEK_AFTER_GW = "week_after_gw_flg"
+HOL_TO_WORKDAY_FLG = "holiday_to_workday_flg"
+CITY_COL = "city"
+CITY_REGION_COL = "city_region"
+
+OPEN_DATE_COL = "open_date"
+OPEN_USUALLY_COL = "open_usually"
+OPENED_RECENTLY_FLG = "opened_recently"
+CLOSED_FLG = "closed"
+
+DAYS_FROM_HOL_COL = "days_from_holiday"
+
+VISITORS_DIFF_COL = "visitors_difference"
+VISITORS_LAST_MONTH = "visitors_last_month"
+VISITORS_DOW = VISITORS_COL + DOW_SUFFIX
+VISITORS_NBR_COL = VISITORS_COL + NBRS_SUFFIX
+VISITORS_DOW_NBRS = VISITORS_NBR_COL + DOW_SUFFIX
+
+# Reserve columns
+
+RES_OFFSET = "reservation_offset"
+RESERVE_AIR_COL = "air_reserves"
+RESERVE_HPG_COL = "hpg_reserves"
+RESERVE_AIR_NBR_COL = RESERVE_AIR_COL + NBRS_SUFFIX
+RESERVE_HPG_NBR_COL = RESERVE_HPG_COL + NBRS_SUFFIX
+TOTAL_RES_COL = "total_reservations"
+TOTAL_RES_NBR_COL = TOTAL_RES_COL + NBRS_SUFFIX
+RES_VISITORS_DIFF_COL = "res_visitors_diff"
+RES_VISITORS_DIFF_NBR_COL = "nbr_res_visitors_diff"
+RES_IMPOSSIBILITY_COL = "reservation_impossibility_flag"
+
+
+DAYS_OF_WEEK = ["Mon", "Tue", "Wed", "Th", "Fri", "Sat", "Sun"]
+
+ACTUAL_MEAN = "actual_mean"
+PRED_MEAN = "predicted_mean"
+ACTUAL = "actual"
+PREDICTED = "predicted"
+ERROR_COL = "error"
+
+CITY_DIV_N = 1
+CITY_REGION_DIV_N = 2
+CITY_CLUSTERS_RANGE = range(3, 7)
+AGG_WINDOWS = [7, 14, 28]
+LAGS = [1, 7, 28]
+DOW_WINDOW = 4
+
